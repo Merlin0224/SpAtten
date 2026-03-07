@@ -110,4 +110,42 @@ def main():
     # 2. 替换 BERT 模型中的 Self-Attention 模块为 SpattenBertSelfAttention
     print("replacing self-attention modules with SpattenBertSelfAttention...")
     spatten_model = copy.deepcopy(original_model)
+
+    print("Modifying self-attention modules...")
+    for i, layer in enumerate(spatten_model.encoder.layer):
+        orig_atten_module = layer.attention.self
+        orig_state_dict = orig_atten_module.state_dict()
+
+        config = spatten_model.config
+        new_atten_module + SpattenBertSelfAttention(config)
+        new_atten_module.layer_id = i  # Set layer ID for pruning logic
+
+        # Load original weights into the new attention module
+        new_atten_module.load_state_dict(orig_state_dict)
+
+        # Replace the original attention module with the new one
+        layer.attention.self = new_atten_module
     
+    print("Replacement complete.")
+
+    # 3. 验证替换后的模型在输入上的输出与原模型一致
+    print("validating the modified model...")
+    inputs_sentence = "The quick brown fox jumps over the lazy dog."
+    inputs = tokenizer(inputs_sentence, return_tensors="pt").to(device)
+
+    with torch.no_grad():
+        orig_outputs = original_model(**inputs)
+        spatten_outputs = spatten_model(**inputs)
+    
+    # Compare the outputs
+    diff = torch.abs(orig_outputs.last_hidden_state - spatten_outputs.last_hidden_state).max().item()
+    print(f"Max difference in last hidden states: {diff:.9f}")
+
+    if diff < 1e-6:
+        print("Validation successful: Outputs are consistent.")
+    else:
+        print("Validation failed: Outputs differ significantly.")
+    
+
+if __name__ == "__main__":
+    main()
