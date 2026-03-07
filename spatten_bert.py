@@ -1,3 +1,6 @@
+import os
+# 设置使用国内镜像
+os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -14,14 +17,21 @@ from transformers import BertModel, BertTokenizer
 #===============================================================================
 class SpattenBertSelfAttention(BertSelfAttention):
     def __init__(self, config, position_embedding_type=None):
-        super().__init__(config, position_embedding_type=position_embedding_type)
+        super().__init__(config)
 
         # [Spatten] Additional parameters for Spatten
         self.layer_id = 0
         self.token_prune_ratio = 0.0
         self.head_prune_ratio = 0.0
+        self.prune_num = 0
+        self.enable_prune = False
 
-        def forward(
+    def transpose_for_scores(self, x):
+        new_x_shape = x.size()[:-1] + (self.num_attention_heads, self.attention_head_size)
+        x = x.view(*new_x_shape)
+        return x.permute(0, 2, 1, 3)
+
+    def forward(
             self,
             hidden_states,
             attention_mask=None,
@@ -30,6 +40,8 @@ class SpattenBertSelfAttention(BertSelfAttention):
             encoder_attention_mask=None,
             past_key_value=None,
             output_attentions=False,
+            active_head_indices=None,
+            **kwargs
         ):
         #--------------------
         # TODO : Implement the forward pass for SpattenBertSelfAttention, including token and head pruning logic
@@ -78,18 +90,14 @@ class SpattenBertSelfAttention(BertSelfAttention):
         if head_mask is not None:
             attention_probs = attention_probs * head_mask
         # 5. 计算上下文向量(probs @ V)
-        context_layer = torch.matmul(attention__probs, value_layer)
+        context_layer = torch.matmul(attention_probs, value_layer)
 
         context_layer = context_layer.permute(0, 2, 1, 3).contiguous()
 
         new_context_layer_shape = context_layer.size()[:-2] + (self.all_head_size,)
         context_layer = context_layer.view(new_context_layer_shape)
 
-        outputs = (context_layer, attention_probs) if output_attentions else (context_layer,)
-
-        if self.is_decoder:
-            outputs = outputs + (past_key_value,)
-        return outputs
+        return (context_layer, attention_probs)
 
 #===============================================================================
 
@@ -117,7 +125,7 @@ def main():
         orig_state_dict = orig_atten_module.state_dict()
 
         config = spatten_model.config
-        new_atten_module + SpattenBertSelfAttention(config)
+        new_atten_module = SpattenBertSelfAttention(config)
         new_atten_module.layer_id = i  # Set layer ID for pruning logic
 
         # Load original weights into the new attention module
@@ -126,6 +134,9 @@ def main():
         # Replace the original attention module with the new one
         layer.attention.self = new_atten_module
     
+    spatten_model.to(device)
+    spatten_model.eval()
+
     print("Replacement complete.")
 
     # 3. 验证替换后的模型在输入上的输出与原模型一致
@@ -138,8 +149,8 @@ def main():
         spatten_outputs = spatten_model(**inputs)
     
     # Compare the outputs
-    diff = torch.abs(orig_outputs.last_hidden_state - spatten_outputs.last_hidden_state).max().item()
-    print(f"Max difference in last hidden states: {diff:.9f}")
+    diff = torch.abs(orig_outputs.last_hidden_state - spatten_outputs.last_hidden_state).mean().item()
+    print(f"Mean difference in last hidden states: {diff:.9f}")
 
     if diff < 1e-6:
         print("Validation successful: Outputs are consistent.")

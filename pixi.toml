@@ -1,6 +1,6 @@
 [workspace]
 authors = ["merlin0224 <3345967904@qq.com>"]
-channels = ["conda-forge"]
+channels = ["https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge"]
 name = "Spatten"
 platforms = ["linux-64"]
 version = "0.1.0"
