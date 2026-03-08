@@ -8,7 +8,7 @@ import math
 import copy
 from transformers.models.bert.modeling_bert import BertSelfAttention, BertConfig, BertModel, BertEncoder
 from transformers import BertTokenizer
-from spattrn_bert import SpattenBertSelfAttention
+from spatten_bert import SpattenBertSelfAttention
 from module import slice_linear_weights, spatten_encoder_forward
 # ==========================================
 

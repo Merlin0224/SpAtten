@@ -5,7 +5,7 @@ import math
 import copy
 from transformers.models.bert.modeling_bert import BertSelfAttention, BertConfig, BertModel, BertEncoder
 from transformers import BertTokenizer
-
+from module import slice_linear_weights, spatten_encoder_forward
 
 # ==========================================
 
@@ -32,6 +32,9 @@ class SpattenBertSelfAttention(BertSelfAttention):
         self.token_prune_num = 0 # 本层要剪掉的Token数量
         self.cumulative_token_score = None # 累积的Token重要性分数，用于级联传递 [Batch, SeqLen]
         self.next_active_token_indices = None # 下一层要保留的Token索引
+
+        self.enable_v_prune = False # 是否启用局部 Value 剪枝
+        self.v_prune_num = 2 # 每个Head内部要剪掉的Value维度数量
 
     def transpose_for_scores(self, x, n_heads):
         if x.dim() == 2:
@@ -91,7 +94,23 @@ class SpattenBertSelfAttention(BertSelfAttention):
         # Dropout
         attention_probs = self.dropout(attention_probs)
 
+        # === Local Value Pruning (局部 V 向量剪枝) ===
+        # Spatten 论文中提到的局部 Value 剪枝：在每个 Head 内部剪掉某些维度
+        # 注意力概率分布形状： [Batch, Heads, Seq_q, Seq_k]
+        if getattr(self, "enable_v_prune", False) and getattr(self, "v_prune_num", 0) > 0:
+            seq_k_len = attention_probs.size(-1)
+            if seq_k_len > self.v_prune_num:
+                keep_v = seq_k_len - self.v_prune_num
 
+                # 精确获取需要的保留的 Top-K 索引
+                _, topk_idx = torch.topk(attention_probs, k=keep_v, dim=-1)
+
+                # 创建全 0 掩码，并把保留位置 1
+                mask = torch.zeros_like(attention_probs)
+                mask.scatter_(-1, topk_idx, 1)
+
+                # 应用掩码
+                attention_probs = attention_probs * mask
         # === [Spatten] 级联头剪枝逻辑 ===
         # 5. Context & 重要性评估（算法二）
         context_layer = torch.matmul(attention_probs, value_layer)
