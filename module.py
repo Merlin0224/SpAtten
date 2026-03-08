@@ -47,7 +47,6 @@ def spatten_encoder_forward(self, hidden_states, attention_mask=None, **kwargs):
         # [Token 剪枝执行阶段]: 物理切片 hidden_states 和 attention_mask
         # ----------------------------------------------------
         if active_token_indices is not None:
-            bs, keep_len = active_token_indices.shape
 
             # 1. 切片 hidden_states [Batch, Seq, Hidden] -> [Batch, Keep_Seq, Hidden]
             # 扩展索引的维度以匹配 hidden_states
@@ -57,7 +56,7 @@ def spatten_encoder_forward(self, hidden_states, attention_mask=None, **kwargs):
             # 2. 切片 attention_mask [Batch, 1, 1, Seq] -> [Batch, 1, 1, Keep_Seq]
             if attention_mask is not None:
                 mask_indices = active_token_indices.unsqueeze(1).unsqueeze(2)
-                attention_mask = torch.gather(attention_mask, dim=-1, index=mask_indices)
+                attention_mask = torch.gather(attention_mask, 3, index=mask_indices)
             
             # 必须同步切片历史累积的 Token Score，否则层数增加会产生形状冲突！
             if cumulative_token_score is not None:
