@@ -40,10 +40,6 @@ def _fwd_kernel(
         start_n =tl.multiple_of(start_n, BLOCK_N)
         offs_n = start_n + tl.arange(0, BLOCK_N)
 
-        # --------------
-        # TODO: 量化逻辑
-        # --------------
-
         # 加载 Key 和 Value 块到SRAM
         k = tl.load(k_ptrs + start_n * stride_kn, mask=offs_n[None, :] < N_CTX, other=0.0)
         v = tl.load(v_ptrs + start_n * stride_vn, mask=offs_n[None, :] < N_CTX, other=0.0)
