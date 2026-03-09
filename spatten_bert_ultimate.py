@@ -15,78 +15,111 @@ import triton.language as tl
 
 from module import slice_linear_weights, spatten_encoder_forward
 
-# ========================================================
-# Triton 渐进式量化 Kernel (Progressive Quantization)
-# ========================================================
+# =====================================================================
+# Triton 渐进式量化 Kernel (Progressive Quantization) 和 FlashAttention
+# =====================================================================
 @triton.jit
 def _progressive_qk_kernel(
-    Q, K_MSB, K_LSB, Scores,
+    Q, K_MSB, K_LSB, V, Out,
     stride_qz, stride_qh, stride_qm, stride_qk,
     stride_kz, stride_kh, stride_kn, stride_kk,
-    stride_sz, stride_sh, stride_sm, stride_sn,
+    stride_vz, stride_vh, stride_vn, stride_vk,
+    stride_oz, stride_oh, stride_om, stride_ok,
     Z, H, N_CTX_Q, N_CTX_K,
-    Head_dim: tl.constexpr,
+    sm_scale, threshold,
     BLOCK_M: tl.constexpr,
     BLOCK_N: tl.constexpr,
-    SCORE_THRESHOLD: tl.constexpr,
-    SQRT_D: tl.constexpr
+    d_model: tl.constexpr
 ):
     start_m = tl.program_id(0)
     off_hz = tl.program_id(1)
 
-    batch_id = off_hz // H
-    head_id = off_hz % H
-    
-    # 指针基础
-    q_ptr_base = Q + batch_id * stride_qz + head_id * stride_qh
-    k_msb_ptr_base = K_MSB + batch_id * stride_kz + head_id * stride_kh
-    k_lsb_ptr_base = K_LSB + batch_id * stride_kz + head_id * stride_kh
-    s_ptr_base = Scores + batch_id * stride_sz + head_id * stride_sh
+    off_b = off_hz // H
+    off_h = off_hz % H
+
+    q_base = Q + off_b * stride_qz + off_h * stride_qh
+    k_msb_base = K_MSB + off_b * stride_kz + off_h * stride_kh
+    k_lsb_base = K_LSB + off_b * stride_kz + off_h * stride_kh
+    v_base = V + off_b * stride_vz + off_h * stride_vh
+    out_base = Out + off_b * stride_oz + off_h * stride_oh
 
     offs_m = start_m * BLOCK_M + tl.arange(0, BLOCK_M)
     offs_n = tl.arange(0, BLOCK_N)
-    offs_k = tl.arange(0, Head_dim)
+    offs_d = tl.arange(0, d_model)
 
-    # 读入 Q 的 Block
-    q_ptrs = q_ptr_base + offs_m[:, None] * stride_qm + offs_k[None, :] * stride_qk
-    q = tl.load(q_ptrs, mask=offs_m[:, None] < N_CTX_Q, other=0.0)
+    # 加载 Q (形状:[BLOCK_M, d_model])
+    q_ptrs = q_base + offs_m[:, None] * stride_qm + offs_d[None, :] * stride_qk
+    qi = tl.load(q_ptrs, mask=offs_m[:, None] < N_CTX_Q, other=0.0)
 
-    for start_n in range(0, N_CTX_K, BLOCK_N):
-        start_n_offs = start_n + offs_n
+    m_i = tl.zeros([BLOCK_M], dtype=tl.float32) - float('inf')
+    l_i = tl.zeros([BLOCK_M], dtype=tl.float32)
+    acc = tl.zeros([BLOCK_M, d_model], dtype=tl.float32)
 
-        # [激进读取]：只读 K_MSB
-        k_msb_ptrs = k_msb_ptr_base + start_n_offs[None, :] * stride_kn + offs_k[:, None] * stride_kk
-        k_msb = tl.load(k_msb_ptrs, mask=start_n_offs[None, :] < N_CTX_K, other=0.0)
+    for j in range(0, tl.cdiv(N_CTX_K, BLOCK_N)):
+        cur_n = j * BLOCK_N
+        offs_n_curr = cur_n + offs_n
 
-        qk = tl.dot(q, k_msb) / SQRT_D
+        # 激进加载 K_MSB (形状为[BLOCK_N, d_model])
+        k_msb_ptrs = k_msb_base + offs_n_curr[:, None] * stride_kn + offs_d[None, :] * stride_kk
+        k_msb = tl.load(k_msb_ptrs, mask=offs_n_curr[:, None] < N_CTX_K, other=0.0)
 
-        # [分支预测]：如果 MSB 算出的最高分不够大，说明分布平坦，需要回退读取
-        if tl.max(qk) < SCORE_THRESHOLD:
-            k_lsb_ptrs = k_lsb_ptr_base + start_n_offs[None, :] * stride_kn + offs_k[:, None] * stride_kk
-            k_lsb = tl.load(k_lsb_ptrs, mask=start_n_offs[None, :] < N_CTX_K, other=0.0)
-            qk += tl.dot(q, k_lsb) / SQRT_D
+        # qk:[BLOCK_M, d_model] @ [d_model, BLOCK_N] = [BLOCK_M, BLOCK_N]
+        qk = tl.dot(qi, tl.trans(k_msb)) * sm_scale
 
-        s_ptrs = s_ptr_base + offs_m[:, None] * stride_sm + start_n_offs[None, :] * stride_sn
-        tl.store(s_ptrs, qk, mask=(offs_m[:, None] < N_CTX_Q) & (start_n_offs[None, :] < N_CTX_K))
+        #  渐进式分支预测
+        max_score = tl.max(qk)
+        if max_score < threshold:
+            k_lsb_ptrs = k_lsb_base + offs_n_curr[:, None] * stride_kn + offs_d[None, :] * stride_kk
+            k_lsb = tl.load(k_lsb_ptrs, mask=offs_n_curr[:, None] < N_CTX_K, other=0.0)
+            qk += tl.dot(qi, tl.trans(k_lsb)) * sm_scale
 
-def triton_progressive_qk(q, k_msb, k_lsb, threshold):
+        # Online Softmax 逻辑
+        m_ij = tl.max(qk, 1)
+        p = tl.exp(qk - m_ij[:, None])
+        l_ij = tl.sum(p, 1)
+
+        m_next = tl.maximum(m_i, m_ij)
+        alpha = tl.exp(m_i - m_next)
+        beta = tl.exp(m_ij - m_next)
+
+        l_i = l_i * alpha + l_ij * beta
+        acc = acc * alpha[:, None]
+
+        # 加载 V 并累加输出 (形状为 [BLOCK_N, d_model])
+        v_ptrs = v_base + offs_n_curr[:, None] * stride_vn + offs_d[None, :] * stride_vk
+        v = tl.load(v_ptrs, mask=offs_n_curr[:, None] < N_CTX_K, other=0.0)
+
+        p_scaled = p * beta[:, None]
+        acc = tl.dot(p_scaled.to(tl.float16), v.to(tl.float16), acc)
+
+        m_i = m_next
+
+    # 归一化并写回显存
+    acc = acc / l_i[:, None]
+    out_ptrs = out_base + offs_m[:, None] * stride_om + offs_d[None, :] * stride_ok
+    tl.store(out_ptrs, acc.to(Out.type.element_ty), mask=offs_m[:, None] < N_CTX_Q)
+
+
+def triton_progressive_qk(q, k_msb, k_lsb, v, threshold, sm_scale):
     Z, H, M, D = q.shape
     _, _, N, _ = k_msb.shape
-    scores = torch.empty((Z, H, M, D), device=q.device, dtype=q.dtype)
+    out = torch.empty_like(q)
 
     BLOCK_M, BLOCK_N = 32, 32
     grid = (triton.cdiv(M, BLOCK_M), Z * H)
 
     _progressive_qk_kernel[grid](
-        q, k_msb, k_lsb, scores,
+        q, k_msb, k_lsb, v, out,
         q.stride(0), q.stride(1), q.stride(2), q.stride(3),
         k_msb.stride(0), k_msb.stride(1), k_msb.stride(2), k_msb.stride(3),
-        scores.stride(0), scores.stride(1), scores.stride(2), scores.stride(3),
+        v.stride(0), v.stride(1), v.stride(2), v.stride(3),
+        out.stride(0), out.stride(1), out.stride(2), out.stride(3),
         Z, H, M, N,
-        Head_dim=D, BLOCK_M=BLOCK_M, BLOCK_N=BLOCK_N,
-        SCORE_THRESHOLD=threshold, SQRT_D=math.sqrt(D)
+        sm_scale, threshold,
+        BLOCK_M=BLOCK_M, BLOCK_N=BLOCK_N, d_model=D,
+        num_warps=4, num_stages=1
     )
-    return scores
+    return out
 
 # ========================================================
 # Spatten Attention Module
@@ -118,7 +151,7 @@ class SpattenBertSelfAttention(BertSelfAttention):
         self.enable_prog_quant = False
         self.quant_threshold = 1.0 
     
-    def transpose_for_scores(self, x, n_heads):
+    def transpose_for_out(self, x, n_heads):
         if x.dim() == 2:
             x = x.unsqueeze(0)
         
@@ -129,12 +162,12 @@ class SpattenBertSelfAttention(BertSelfAttention):
     def forward(
         self, hidden_states, attention_mask=None, **kwargs
     ):
-        
+        attention_probs = None
         device = hidden_states.device
         bs, seq_len, _ = hidden_states.shape
 
         if self.active_head_indices_for_this_layer is not None:
-            active_head_indices = active_head_indices_for_this_layer
+            active_head_indices = self.active_head_indices_for_this_layer
         else:
             active_head_indices = torch.arange(self.num_heads, device=device)
         cur_heads = active_head_indices.size(0)
@@ -143,73 +176,60 @@ class SpattenBertSelfAttention(BertSelfAttention):
         wk, bk = slice_linear_weights(self.key, active_head_indices, self.num_heads, self.head_dim)
         wv, bv = slice_linear_weights(self.value, active_head_indices, self.num_heads, self.head_dim)
                 
-        query_layer = self.transpose_for_scores(F.linear(hidden_states, wq, bq), cur_heads)
-        key_layer = self.transpose_for_scores(F.linear(hidden_states, wk, bk), cur_heads)
-        value_layer = self.transpose_for_scores(F.linear(hidden_states, wv, bv), cur_heads)
+        query_layer = self.transpose_for_out(F.linear(hidden_states, wq, bq), cur_heads)
+        key_layer = self.transpose_for_out(F.linear(hidden_states, wk, bk), cur_heads)
+        value_layer = self.transpose_for_out(F.linear(hidden_states, wv, bv), cur_heads)
         
         if self.enable_prog_quant:
             k_msb = key_layer * 0.8 # 主要特征
             k_lsb = key_layer * 0.2 # 残差补偿
 
-            attention_scores = triton_progressive_qk(
+            context_layer = triton_progressive_qk(
                 query_layer.contiguous(),
                 k_msb.contiguous(),
                 k_lsb.contiguous(),
-                self.quant_threshold
+                value_layer.contiguous(),
+                self.quant_threshold, 1.0 / math.sqrt(self.head_dim)
             )
+
+            q_mean = query_layer.mean(dim=2, keepdim=True) # [B, H, 1, D]
+            proxy_scores = torch.matmul(q_mean, key_layer.transpose(-1, -2) / math.sqrt(self.head_dim)) # [B, H, 1, S]
+            attention_probs = torch.softmax(proxy_scores, dim=-1)
         else:
+            # 原生 PyTorch 路径
             attention_scores = torch.matmul(query_layer, key_layer.transpose(-1, -2) / math.sqrt(self.head_dim))
+            if attention_mask is not None:
+                if attention_mask.dim() > attention_scores.dim():
+                    attention_mask = attention_mask.squeeze(1)
+                attention_scores = attention_scores + attention_mask
+
+            attention_probs = nn.Softmax(dim=-1)(attention_scores)
+            attention_probs = self.dropout(attention_probs)
+
+            context_layer = torch.matmul(attention_probs, value_layer)
         
-        if attention_mask is not None:
-            if attention_mask.size(-1) != attention_scores.size(-1):
-                attention_mask = attention_mask[:, :, :, :attention_scores.size(-1)]
-            attention_scores = attention_scores + attention_mask
-        
-        attention_probs = nn.Softmax(dim=-1)(attention_scores)
-        attention_probs = self.dropout(attention_probs)
-        
-        print(f"DEBUG: Q:{query_layer.shape}, K:{key_layer.shape}, V:{value_layer.shape}, Probs:{attention_probs.shape}")
-        if self.enable_v_prune and self.v_prune_num > 0 and attention_probs.size(-1) > self.v_prune_num:
-            keep_v = attention_probs.size(-1) - self.v_prune_num
+        current_token_importance = attention_probs.sum(dim=(1, 2))
 
-            # 使用更安全的掩码生成方式
-            probs_flat = attention_probs.view(-1, attention_probs.size(-1))
-            _, topk_idx = torch.topk(probs_flat, k=keep_v, dim=-1)
-            
-            mask = torch.zeros_like(probs_flat)
-            # 使用 scatter 的 safe 版本
-            mask.scatter_(dim=-1, index=topk_idx, value=1.0)
-            attention_probs = (attention_probs.view(-1, attention_probs.size(-1)) * mask).view(attention_probs.shape)
-            print(f"Mask shape: {mask.shape}, Topk_idx shape: {topk_idx.shape}")
-
-        # query: [B, H, Seq_q, D]
-        # prob:  [B, H, Seq_q, Seq_k]
-        # value: [B, H, Seq_k, D]
-        seq_k_len = value_layer.size(-2)
-        if attention_probs.size(-1) != seq_k_len:
-            attention_probs = attention_probs[..., :seq_k_len]
-
-        context_layer = torch.matmul(attention_probs, value_layer)
-
+        # --- 剪枝决策逻辑 ---
+        # Head Pruning 决策
         importance_dims = (0, 2, 3) if context_layer.dim() == 4 else (1, 2)
-        head_importance = context_layer.abs().mean(dim=importance_dims)  # [cur_heads]
-
+        head_importance = context_layer.abs().mean(dim=importance_dims)
         next_head_indices = active_head_indices
+
         if self.enable_head_prune and cur_heads > self.head_prune_num:
             keep_k = max(1, cur_heads - self.head_prune_num) # Ensure at least 1 head remains
             _, topk_indices = torch.topk(head_importance, k=keep_k)
             next_head_indices = active_head_indices[topk_indices]
             next_head_indices = torch.sort(next_head_indices).values
         
-        self.next_active_head_indices = next_head_indices  # Store for next layer to use
+        self.next_active_head_indices = next_head_indices
 
-        curren_token_importance = attention_probs.sum(dim=(1, 2))  # [Batch, Seq_k]
-        
-        # 累积重要性分数：级联传递给下一层
+        # Token Pruning 决策
         if self.cumulative_token_score is None:
-            self.cumulative_token_score = curren_token_importance
+            self.cumulative_token_score = current_token_importance
         else:
-            self.cumulative_token_score += curren_token_importance
+            self.cumulative_token_score += current_token_importance
+
         next_token_indices = None
         if self.enable_token_prune and seq_len > self.token_prune_num:
             keep_k_tokens = max(1, seq_len - self.token_prune_num)
@@ -219,18 +239,44 @@ class SpattenBertSelfAttention(BertSelfAttention):
         
         self.next_active_token_indices = next_token_indices # Store for next layer to use
 
+
+        # print(f"DEBUG: Q:{query_layer.shape}, K:{key_layer.shape}, V:{value_layer.shape}, Probs:{attention_probs.shape}")
+        if self.enable_v_prune and self.v_prune_num > 0:
+            keep_d = self.head_dim - self.v_prune_num
+            # 物理剪枝 V: [B, H, S_k, D] -> [B, H, S_k, Keep_D]
+            v_pruned = value_layer[..., :keep_d]
+            # 矩阵乘法
+            context_layer = torch.matmul(attention_probs, v_pruned) # [B, H, S_q, Keep_D]
+        else:
+            context_layer = torch.matmul(attention_probs, value_layer) # [B, H, S_q, D]
+
+        # --- 统一形状处理 ---
+        # 移走 H 维度: [B, H, S, D_out] -> [B, S, H, D_out]
+        context_layer = context_layer.permute(0, 2, 1, 3).contiguous()
+        
+        # 展平: [B, S, H * D_out]
+        # 使用 context_layer.shape[0] 和 shape[1] 获取当前的 Batch 和 Seq_Len
+        bs = context_layer.shape[0]
+        seq_len_actual = context_layer.shape[1]
+        context_layer = context_layer.reshape(bs, seq_len_actual, -1)
+        
+        # print(f"Mask shape: {mask.shape}, Topk_idx shape: {topk_idx.shape}")
+
         if context_layer.dim() == 4:
             context_layer = context_layer.permute(0, 2, 1, 3).contiguous()
-            full_context = torch.zeros(context_layer.shape[0], context_layer.shape[1], self.num_heads, self.head_dim, device=device, dtype=hidden_states.dtype)
-            full_context[:, :, active_head_indices, :] = context_layer 
+            full_context = torch.zeros(
+                context_layer.shape[0], context_layer.shape[1],
+                self.num_heads, self.head_dim, device=device, dtype=hidden_states.dtype)
+            # full_context[:, :, active_head_indices, :] = context_layer 
             full_context = full_context.view(context_layer.shape[0], context_layer.shape[1], -1)
         else:
             context_layer = context_layer.permute(1, 0, 2).contiguous()
-            full_context = torch.zeros(context_layer.shape[0], self.num_heads, self.head_dim, device=device, dtype=hidden_states.dtype)
-            full_context[:, active_head_indices, :] = context_layer
+            full_context = torch.zeros(context_layer.shape[0], self.num_heads,
+                self.head_dim, device=device, dtype=hidden_states.dtype)
+            # full_context[:, active_head_indices, :] = context_layer
             full_context = full_context.view(context_layer.shape[0], -1)
         # 始终只返回 2 个值：(Output, Weights)
-        return (full_context, attention_probs)
+        return (full_context, None)
 
 
 # ====================================================================

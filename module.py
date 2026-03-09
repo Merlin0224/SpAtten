@@ -66,7 +66,7 @@ def spatten_encoder_forward(self, hidden_states, attention_mask=None, **kwargs):
         # 状态同步
         # ----------------------------------------------------
 
-        layer_module.attention.self.active_indices_for_this_layer = active_head_indices
+        layer_module.attention.self.active_head_indices_for_this_layer = active_head_indices
         layer_module.attention.self.cumulative_token_score = cumulative_token_score
 
         # ----------------------------------------------------
