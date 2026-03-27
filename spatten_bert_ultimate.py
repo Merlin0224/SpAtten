@@ -195,7 +195,7 @@ def _spatten_v_prune_kernel(
 
 @triton.jit
 def _spatten_fused_ultimate_kernel(
-    Q, K_MSB, K_LSB, V, Out,
+    Q, K_MSB, K_LSB, V, Out, Out_Sum,
     stride_qz, stride_qh, stride_qm, stride_qk,
     stride_kz, stride_kh, stride_kn, stride_kk,
     stride_vz, stride_vh, stride_vn, stride_vk,
@@ -229,6 +229,7 @@ def _spatten_fused_ultimate_kernel(
     m_i = tl.zeros([BLOCK_M], dtype=tl.float32) - float('inf')
     l_i = tl.zeros([BLOCK_M], dtype=tl.float32)
     acc = tl.zeros([BLOCK_M, d_model], dtype=tl.float32)
+    row_sum = tl.zeros([BLOCK_M], dtype=tl.float32)
 
     for j in range(0, tl.cdiv(N_CTX_K, BLOCK_N)):
         cur_n = j * BLOCK_N
@@ -256,7 +257,7 @@ def _spatten_fused_ultimate_kernel(
         m_next = tl.maximum(m_i, m_ij)
         alpha = tl.exp(m_i - m_next)
         beta = tl.exp(m_ij - m_next)
-
+        row_sum += tl.sum(p, 1) * beta
         # ---------------------------------------------------------
         # 特性 2：局部 V 向量按需物理剪枝 (Local V Pruning)
         # ---------------------------------------------------------
@@ -294,6 +295,7 @@ def _spatten_fused_ultimate_kernel(
     # 归一化并写回显存
     acc = acc / l_i[:, None]
     out_ptrs = out_base + offs_m[:, None] * stride_om + offs_d[None, :] * stride_ok
+    sum_ptrs = Out_Sum + off_b * H * N_CTX_Q + off_h * N_CTX_Q + offs_m
     tl.store(out_ptrs, acc.to(Out.type.element_ty), mask=offs_m[:, None] < N_CTX_Q)
 
 
@@ -341,16 +343,16 @@ def triton_fused_spatten_v_prune(q, k, v, v_threshold, sm_scale):
     )
     return out
 
-def triton_fused_spatten_ultimate(q, k_msb, k_lsb, v, quant_threshold, v_threshold, sm_scale):
+def triton_fused_spatten_ultimate(q, k_msb, k_lsb, v, out_sum, quant_threshold, v_threshold, sm_scale):
     Z, H, M, D = q.shape
     _, _, N, _ = k_msb.shape
     out = torch.empty_like(q)
 
-    BLOCK_M, BLOCK_N = 32, 32
+    BLOCK_M, BLOCK_N = 64, 64
     grid = (triton.cdiv(M, BLOCK_M), Z * H)
 
     _spatten_fused_ultimate_kernel[grid](
-        q, k_msb, k_lsb, v, out,
+        q, k_msb, k_lsb, v, out, out_sum,
         q.stride(0), q.stride(1), q.stride(2), q.stride(3),
         k_msb.stride(0), k_msb.stride(1), k_msb.stride(2), k_msb.stride(3),
         v.stride(0), v.stride(1), v.stride(2), v.stride(3),
@@ -358,7 +360,7 @@ def triton_fused_spatten_ultimate(q, k_msb, k_lsb, v, quant_threshold, v_thresho
         Z, H, M, N,
         sm_scale, quant_threshold, v_threshold,
         BLOCK_M=BLOCK_M, BLOCK_N=BLOCK_N, d_model=D,
-        num_warps=4, num_stages=2
+        num_warps=8, num_stages=3
     )
     return out
 
@@ -551,6 +553,7 @@ class SpattenBertSelfAttention(BertSelfAttention):
     #         full_context = full_context.view(context_layer.shape[0], -1)
     #     # 始终只返回 2 个值：(Output, Weights)
     #     return (full_context, None)
+    
     def forward(
         self, hidden_states, attention_mask=None, **kwargs
     ):
@@ -576,6 +579,7 @@ class SpattenBertSelfAttention(BertSelfAttention):
         sm_scale = 1.0 / math.sqrt(self.head_dim)
         attention_probs = None
         context_layer = None
+        op = True
 
         # ====================================================================
         # 核心算子路由：决定走哪条加速路径
@@ -586,26 +590,24 @@ class SpattenBertSelfAttention(BertSelfAttention):
             k_lsb = key_layer * 0.2
             dynamic_v_threshold = 0.05 
             
+            # 准备一个专门放概率和的 buffer
+            out_sum = torch.zeros((bs, cur_heads, seq_len), device=device, dtype=torch.float32)
+            
             context_layer = triton_fused_spatten_ultimate(
-                query_layer.contiguous(),
-                k_msb.contiguous(),
-                k_lsb.contiguous(),
-                value_layer.contiguous(),
+                query_layer, k_msb, k_lsb, value_layer, out_sum, # 传入 buffer
                 quant_threshold=self.quant_threshold,
-                v_threshold=dynamic_v_threshold,
+                v_threshold=0.05,
                 sm_scale=sm_scale
             )
-            # 近似概率用于后续Token剪枝的累积
-            q_mean = query_layer.mean(dim=2, keepdim=True)
-            proxy_scores = torch.matmul(q_mean, key_layer.transpose(-1, -2) * sm_scale)
-            attention_probs = torch.softmax(proxy_scores, dim=-1)
+            current_token_importance = out_sum.sum(dim=1) # [B, S_Q]
+            op = False
 
         elif self.enable_prog_quant:
             # 【仅开启渐进式量化】
             k_msb = key_layer * 0.8
             k_lsb = key_layer * 0.2
             context_layer = triton_progressive_qk(
-                query_layer.contiguous(), k_msb.contiguous(), k_lsb.contiguous(), value_layer.contiguous(),
+                query_layer, k_msb, k_lsb, value_layer,
                 self.quant_threshold, sm_scale
             )
             q_mean = query_layer.mean(dim=2, keepdim=True)
@@ -616,7 +618,7 @@ class SpattenBertSelfAttention(BertSelfAttention):
             # 【仅开启局部 V 剪枝】
             dynamic_v_threshold = 0.05 
             context_layer = triton_fused_spatten_v_prune(
-                query_layer.contiguous(), key_layer.contiguous(), value_layer.contiguous(),
+                query_layer, key_layer, value_layer,
                 v_threshold=dynamic_v_threshold, sm_scale=sm_scale
             )
             q_mean = query_layer.mean(dim=2, keepdim=True)
@@ -635,13 +637,45 @@ class SpattenBertSelfAttention(BertSelfAttention):
             attention_probs = self.dropout(attention_probs)
             context_layer = torch.matmul(attention_probs, value_layer)
 
+        # # 1. Attention 核心计算 (由 Triton 或 PyTorch 完成)
+        # if self.enable_prog_quant:
+        #     # 开启渐进式量化
+        #     k_msb = key_layer * 0.8
+        #     k_lsb = key_layer * 0.2
+        #     context_layer = triton_progressive_qk(
+        #         query_layer, 
+        #         k_msb, 
+        #         k_lsb, 
+        #         value_layer, 
+        #         self.quant_threshold, 
+        #         1.0 / math.sqrt(self.head_dim)
+        #         )
+
+        #     proxy_scores = torch.matmul(query_layer.mean(dim=2, keepdim=True), key_layer.transpose(-1, -2) * sm_scale)
+        #     attention_probs = torch.softmax(proxy_scores, dim=-1)
+        # else:
+        #     # 原生 FlashAttention / Matmul
+        #     attention_scores = torch.matmul(query_layer, key_layer.transpose(-1, -2) * sm_scale)
+        #     attention_probs = nn.Softmax(dim=-1)(attention_scores)
+        #     context_layer = torch.matmul(attention_probs, value_layer)
+
+        # # 2. V 剪枝 
+        # if self.enable_v_prune and self.v_prune_num > 0:
+        #     keep_k = max(1, attention_probs.shape[-1] - self.v_prune_num)
+        #     topk_probs, topk_indices = torch.topk(attention_probs, k=keep_k, dim=-1)
+        #     # 使用 gather 提取
+        #     expanded_v = value_layer.unsqueeze(2).expand(-1, -1, query_layer.shape[2], -1, -1)
+        #     expanded_indices = topk_indices.unsqueeze(-1).expand(-1, -1, -1, -1, value_layer.shape[-1])
+        #     v_pruned = torch.gather(expanded_v, dim=3, index=expanded_indices)
+        #     context_layer = torch.sum(topk_probs.unsqueeze(-1) * v_pruned, dim=3)
+
         # ====================================================================
         # 级联剪枝决策逻辑 (Head & Token Pruning)
         # ====================================================================
         # 此时的 attention_probs (不论是原生还是近似) 都会用于 Token Pruning
         # context_layer 将用于 Head Pruning
-        
-        current_token_importance = attention_probs.sum(dim=(1, 2))
+        if op:
+            current_token_importance = attention_probs.sum(dim=(1, 2))
 
         # Head Pruning 决策
         importance_dims = (0, 2, 3) if context_layer.dim() == 4 else (1, 2)

@@ -102,12 +102,13 @@ def main():
             # 清理显存以防 OOM 互相影响
             torch.cuda.empty_cache()
             
-            orig_ms = benchmark_latency(original_model, inputs, is_spatten=False)
-            
+            sp_ms = benchmark_latency(spatten_model, inputs, is_spatten=True)
+
             torch.cuda.empty_cache()
             
-            sp_ms = benchmark_latency(spatten_model, inputs, is_spatten=True)
-            
+            original_model = torch.compile(original_model)
+            orig_ms = benchmark_latency(original_model, inputs, is_spatten=False)
+
             speedup = orig_ms / sp_ms
             print(f"{seq_len:<10} | {orig_ms:<15.2f} | {sp_ms:<18.2f} | {speedup:<10.2f}x")
 
