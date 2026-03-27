@@ -66,7 +66,7 @@ def main():
     spatten_model.to(device).half().eval()
 
     # 测试的序列长度列表
-    seq_lengths =[128, 256, 512, 1024, 2048, 4096, 8192, 16382]
+    seq_lengths =[128, 256, 512, 1024, 2048, 4096, 8192]
     batch_size = 1
 
     print(f"{'Seq Len':<10} | {'Orig Time(ms)':<15} | {'SpAtten Time(ms)':<18} | {'Speedup':<10}")
