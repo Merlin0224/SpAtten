@@ -72,6 +72,9 @@ def spatten_encoder_forward(self, hidden_states, attention_mask=None, **kwargs):
         # ----------------------------------------------------
         # 执行前向传播 (此处的 hidden_states 已经变短了，FFN 计算量也减小了)
         # ----------------------------------------------------
+        kwargs.pop("use_cache", None)
+        kwargs.pop("output_hidden_states", None)
+        kwargs.pop("return_dict", None)
         layer_outputs = layer_module(
             hidden_states,
             attention_mask=attention_mask,

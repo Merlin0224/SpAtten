@@ -40,12 +40,18 @@ def benchmark_latency(model, input_data, is_spatten=False, warmup=5, iters=20):
     return ((end_time - start_time) / iters) * 1000  # 返回毫秒
 
 def main():
+    # config
+    enable_head_prune = True
+    enable_token_prune = True
+    enable_v_prune = False
+    enable_prog_quant = False
+
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Starting Sequence Length Scalability Benchmark on {device}...\n")
 
     # 突破长度限制：初始化一个支持最大 8192 长度的骨架模型
     config = BertConfig.from_pretrained("bert-base-uncased")
-    config.max_position_embeddings = 8192  # 突破默认的 512 限制
+    config.max_position_embeddings = 32768  # 突破默认的 512 限制
     
     print("Building models (using random weights for performance profiling)...")
     original_model = BertModel(config).to(device).half().eval()
@@ -60,7 +66,7 @@ def main():
     spatten_model.to(device).half().eval()
 
     # 测试的序列长度列表
-    seq_lengths =[128, 256, 512, 1024, 2048, 4096]
+    seq_lengths =[128, 256, 512, 1024, 2048, 4096, 8192, 16382]
     batch_size = 1
 
     print(f"{'Seq Len':<10} | {'Orig Time(ms)':<15} | {'SpAtten Time(ms)':<18} | {'Speedup':<10}")
@@ -71,18 +77,18 @@ def main():
         # 长度越长，剪得越狠，这样才能体现算法设计的价值
         for i in range(12): 
             attn = spatten_model.encoder.layer[i].attention.self
-            attn.enable_head_prune = True
+            attn.enable_head_prune = enable_head_prune
             attn.head_prune_num = 2  # 每层剪 2 个 Head (最终保留一部分)
             
-            attn.enable_token_prune = True
+            attn.enable_token_prune = enable_token_prune
             if i >= 1: 
                 # 每层剪掉当前长度的 5%，实现级联缩短
                 attn.token_prune_num = max(1, int(seq_len * 0.05))
                 
-            attn.enable_v_prune = True
+            attn.enable_v_prune = enable_v_prune
             attn.v_prune_num = 16  # 剪掉 16 个 V 通道 (64 -> 48)
             
-            attn.enable_prog_quant = True
+            attn.enable_prog_quant = enable_prog_quant
             attn.quant_threshold = 0.05 
 
         # 生成随机输入数据

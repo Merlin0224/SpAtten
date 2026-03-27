@@ -100,6 +100,105 @@ def _progressive_qk_kernel(
     tl.store(out_ptrs, acc.to(Out.type.element_ty), mask=offs_m[:, None] < N_CTX_Q)
 
 
+@triton.jit
+def _spatten_v_prune_kernel(
+    Q, K, V, Out,
+    stride_qz, stride_qh, stride_qm, stride_qk,
+    stride_kz, stride_kh, stride_kn, stride_kk,
+    stride_vz, stride_vh, stride_vn, stride_vk,
+    stride_oz, stride_oh, stride_om, stride_ok,
+    Z, H, N_CTX_Q, N_CTX_K,
+    sm_scale, v_threshold, # 传入 V 剪枝的动态阈值
+    BLOCK_M: tl.constexpr,
+    BLOCK_N: tl.constexpr,
+    BLOCK_D: tl.constexpr,
+):
+    start_m = tl.program(0)
+    off_hz = tl.program(1)
+
+    off_b = off_hz // H
+    off_h = off_hz % H
+
+    q_base = Q + off_b * stride_qz + off_h * stride_qh
+    k_base = K + off_b * stride_kz + off_h * stride_kh
+    v_base = V + off_b * stride_vz + off_h * stride_vh
+    out_base = Out + off_b * stride_oz + off_h * stride_oh
+
+    offs_m = start_m * BLOCK_M + tl.arange(0, BLOCK_M)
+    offs_n = tl.arange(0, BLOCK_N)
+    offs_d = tl.arange(0, BLOCK_D)
+
+    # 1. 从 HBM 加载到 Q 块到 SRAM
+    q_ptrs = q_base + offs_m[:, None] * stride_qm + offs_d[None, :] * stride_qk
+    qi = tl.load(q_ptrs, mask=offs_m[:, None] < N_CTX_Q, other=0.0)
+
+    m_i = tl.zeros([BLOCK_M], dtype=tl.float32) - float('inf')
+    l_i = tl.zeros([BLOCK_M], dtype=tl.float32)
+    acc = tl.zeros([BLOCK_M, BLOCK_D], dtype=tl.float32)
+
+    # 在 K 和 V 的序列长度上循环
+    for j in range(0, tl.div(N_CTX_K, BLOCK_N)):
+        cur_n = j * BLOCK_N
+        offs_n_curr = cur_n + offs_n
+
+        # 2. 加载 K 块
+        k_ptrs = k_base + offs_n_curr[:, None] * stride_kn + offs_d[None, :] * stride_kk
+        k = tl.load(k_ptrs, mask=offs_n_curr[:, None] < N_CTX_K, other=0.0)
+
+        # 3. 计算局部 Attention Score (QK^T)
+        qk = tl.dot(qi, tl.trans(k)) * sm_scale
+
+        m_ij = tl.max(qk, 1)
+        m_next = tl.maximum(m_i, m_ij)
+        alpha = tl.exp(m_i - m_next)
+        beta = tl.exp(m_ij - m_next)
+
+        p = tl.exp(qk - m_next[:, None])
+
+         # -------------------------------------------------------------
+        # SRAM 内闭环的局部 V 物理剪枝 (按需访存)
+        # -------------------------------------------------------------
+        # p 的形状是 [BLOCK_M, BLOCK_N] (当前 Q 块对 K 块的概率)
+        # 看当前 BLOCK_N 里的每个 V，是否对“任意一个” Q 有贡献
+
+        max_p_for_v = tl.max(p, axis=0) # 形状: [BLOCK_N]
+        # 优化A：如果这一整个 Block 的 V 都没用，直接跳过整个 V 的加载和计算
+        if tl.max(max_p_for_v) <= v_threshold:
+            # 即使跳过了 V，还是要维护 softmax 的分母 l_i
+            l_ij = tl.sum(p, 1)
+            l_i = l_i * alpha + l_ij * beta
+            acc = acc * alpha[:, None]
+            m_i = m_next
+            continue
+        
+        # 优化B：细粒度掩码，只加载有用的 V 向量
+        v_load_mask = max_p_for_v > v_threshold
+        v_mask_2d = v_load_mask[:, None] & (offs_n_curr[:, None] < N_CTX_K)
+
+        v_ptrs = v_base + offs_n_curr[:, None] * stride_vn + offs_d[None, :] * stride_vk
+        # 物理拒绝读取  
+        # 被 Mask 掉的 V 向量根本不会经过显存总线进入 SRAM
+        v = tl.load(v_ptrs, mask=v_mask_2d, other=0.0)
+
+        # 概率也施加剪枝阈值，置零无效的连接
+        p_pruned = tl.where(p > v_threshold, p, 0.0)
+
+        l_ij = tl.sum(p, 1)
+        l_i = l_i * alpha + l_ij * beta
+        acc = acc * alpha[:, None]
+
+        p_scaled = p_pruned * beta[:, None]
+        acc = tl.dot(p_scaled.to(tl.float16), v.to(tl.float16), acc)
+
+        m_i = m_next
+    
+    # 5. 归一化并写回 HBM
+    acc = acc / l_i[:, None]
+    out_ptrs = out_base + offs_m[:, None] * stride_om + offs_d[None, :] * stride_ok
+    tl.store(out_ptrs, acc.to(Out.type.element_ty), mask=offs_m[:, None] < N_CTX_Q)
+
+
+
 def triton_progressive_qk(q, k_msb, k_lsb, v, threshold, sm_scale):
     Z, H, M, D = q.shape
     _, _, N, _ = k_msb.shape
@@ -121,6 +220,27 @@ def triton_progressive_qk(q, k_msb, k_lsb, v, threshold, sm_scale):
     )
     return out
 
+
+def triton_fused_spatten_v_prune(q, k, v, v_threshold, sm_scale):
+    Z, H, M, D = q.shape
+    _, _, N, _ = k.shape
+    out = torch.empty_like(q)
+
+    BLOCK_M, BLOCK_N = 32, 32
+    grid = (triton.cdiv(M, BLOCK_M), Z * H)
+
+    _spatten_v_prune_kernel[grid](
+        q, k, v, out,
+        q.stride(0), q.stride(1), q.stride(2), q.stride(3),
+        k.stride(0), k.stride(1), k.stride(2), k.stride(3),
+        v.stride(0), v.stride(1), v.stride(2), v.stride(3),
+        out.stride(0), out.stride(1), out.stride(2), out.stride(3),
+        Z, H, M, N,
+        sm_scale, v_threshold,
+        BLOCK_M=BLOCK_M, BLOCK_N=BLOCK_N, BLOCK_D=D,
+        num_warps=4, num_stages=2
+    )
+    return out
 # ========================================================
 # Spatten Attention Module
 # ========================================================
@@ -242,11 +362,43 @@ class SpattenBertSelfAttention(BertSelfAttention):
 
         # print(f"DEBUG: Q:{query_layer.shape}, K:{key_layer.shape}, V:{value_layer.shape}, Probs:{attention_probs.shape}")
         if self.enable_v_prune and self.v_prune_num > 0:
-            keep_d = self.head_dim - self.v_prune_num
-            # 物理剪枝 V: [B, H, S_k, D] -> [B, H, S_k, Keep_D]
-            v_pruned = value_layer[..., :keep_d]
-            # 矩阵乘法
-            context_layer = torch.matmul(attention_probs, v_pruned) # [B, H, S_q, Keep_D]
+            # # attention_probs 的形状是[Batch, Heads, Seq_Q, Seq_K]
+            # B, H, S_q, S_k = attention_probs.shape
+
+            # # value_layer 的形状是[Batch, Heads, Seq_K, Head_Dim]
+            # _, _, _, D = value_layer.shape
+            # keep_k = S_k - self.v_prune_num
+            # keep_k = max(1, keep_k)
+
+            # # topk_probs:[B, H, S_q, keep_k] 
+            # # topk_indices:[B, H, S_q, keep_k]
+            # topk_probs, topk_indices = torch.topk(attention_probs, k=keep_k, dim=-1)
+            
+            # expanded_v = value_layer.unsqueeze(2).expand(-1, -1, S_q, -1, -1)
+            # expanded_indices = topk_indices.unsqueeze(-1).expand(-1, -1, -1, -1, D)
+
+            # v_pruned = torch.gather(expanded_v, dim=3, index=expanded_indices)
+
+            # context_layer = torch.sum(topk_probs.unsqueeze(-1) * v_pruned, dim=3)
+
+            # 设定动态阈值（比如 0.05，意味着注意力概率小于 5% 的 V 向量，GPU 拒绝加载）
+            dynamic_v_threshold = 0.05 
+
+            context_layer = triton_fused_spatten_v_prune(
+                query_layer.contiguous(),
+                key_layer.contiguous(),
+                value_layer.contiguous(),
+                v_threshold=dynamic_v_threshold,
+                sm_scale=1.0 / math.sqrt(self.head_dim)
+            )
+            
+            # 为了维持后续 Token Pruning 需要累积重要性分数，我们近似计算一个 attention_probs 
+            # (如果在 Triton 内部返回 probs 会增加显存消耗，这里用简单的代理分数)
+            q_mean = query_layer.mean(dim=2, keepdim=True)
+            proxy_scores = torch.matmul(q_mean, key_layer.transpose(-1, -2) / math.sqrt(self.head_dim))
+            attention_probs = torch.softmax(proxy_scores, dim=-1)
+
+
         else:
             context_layer = torch.matmul(attention_probs, value_layer) # [B, H, S_q, D]
 
