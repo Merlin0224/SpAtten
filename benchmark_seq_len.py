@@ -37,14 +37,14 @@ def benchmark_latency(model, input_data, is_spatten=False, warmup=5, iters=20):
     torch.cuda.synchronize()
     
     end_time = time.perf_counter()
-    return ((end_time - start_time) / iters) * 1000  # 返回毫秒
+    return ((end_time - start_time) / iters) * 1000  
 
 def main():
     # config
     enable_head_prune = True
     enable_token_prune = True
-    enable_v_prune = False
-    enable_prog_quant = False
+    enable_v_prune = True
+    enable_prog_quant = True
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Starting Sequence Length Scalability Benchmark on {device}...\n")
