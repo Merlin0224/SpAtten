@@ -1,0 +1,52 @@
+{
+  "timestamp": "20260406_205240",
+  "device": "NVIDIA GeForce RTX 3090",
+  "shape": {
+    "batch": 1,
+    "heads": 12,
+    "seq_q": 4096,
+    "seq_k": 4096,
+    "head_dim": 64
+  },
+  "dtype": "float16",
+  "quant_threshold": 0.05,
+  "v_threshold": 0.01,
+  "results": {
+    "attention_only": {
+      "ms": 0.838432,
+      "meta": null,
+      "slowdown_vs_attention_only": 1.0
+    },
+    "quant_only": {
+      "ms": 2.031591,
+      "meta": {
+        "BLOCK_M": 32,
+        "BLOCK_N": 32,
+        "num_warps": 4,
+        "num_stages": 1
+      },
+      "slowdown_vs_attention_only": 2.423084
+    },
+    "v_prune_only": {
+      "ms": 1.543369,
+      "meta": {
+        "BLOCK_M": 32,
+        "BLOCK_N": 32,
+        "num_warps": 4,
+        "num_stages": 2
+      },
+      "slowdown_vs_attention_only": 1.84078
+    },
+    "full": {
+      "ms": 1.110638,
+      "meta": {
+        "BLOCK_M": 128,
+        "BLOCK_N": 64,
+        "num_warps": 4,
+        "num_stages": 1
+      },
+      "slowdown_vs_attention_only": 1.324661
+    }
+  },
+  "recommendation": "Full fused path is the best Triton variant under the chosen meta. Next step should be threshold sensitivity scanning around quant_threshold and v_threshold."
+}

@@ -16,25 +16,26 @@ import triton.language as tl
 from module import slice_linear_weights, spatten_encoder_forward
 
 TRITON_META_DEFAULTS = {
-    "progressive_qk":{
+    "progressive_qk": {
         "BLOCK_M": 32,
         "BLOCK_N": 32,
         "num_warps": 4,
         "num_stages": 1,
     },
-    "v_prune":{
+    "v_prune": {
         "BLOCK_M": 32,
         "BLOCK_N": 32,
         "num_warps": 4,
         "num_stages": 2,
     },
-    "ultimate":{
-        "BLOCK_M": 64,
+    "ultimate": {
+        "BLOCK_M": 128,
         "BLOCK_N": 64,
-        "num_warps": 8,
-        "num_stages": 3,
-    }
+        "num_warps": 4,
+        "num_stages": 1,
+    },
 }
+
 
 def _resolve_triton_meta(path_name, meta=None):
     config = dict(TRITON_META_DEFAULTS[path_name])
@@ -47,7 +48,6 @@ def _resolve_triton_meta(path_name, meta=None):
 
     config.update(meta)
     return config
-
 
 # =====================================================================
 # Triton 渐进式量化 Kernel (Progressive Quantization) 和 FlashAttention
@@ -333,6 +333,91 @@ def _spatten_fused_ultimate_kernel(
     tl.store(out_ptrs, acc.to(Out.type.element_ty), mask=offs_m[:, None] < N_CTX_Q)
 
 
+@triton.jit
+def _spatten_fused_ultimate_nostats_kernel(
+    Q, K_MSB, K_LSB, V, Out,
+    stride_qz, stride_qh, stride_qm, stride_qk,
+    stride_kz, stride_kh, stride_kn, stride_kk,
+    stride_vz, stride_vh, stride_vn, stride_vk,
+    stride_oz, stride_oh, stride_om, stride_ok,
+    Z, H, N_CTX_Q, N_CTX_K,
+    sm_scale, quant_threshold, v_threshold,
+    BLOCK_M: tl.constexpr,
+    BLOCK_N: tl.constexpr,
+    d_model: tl.constexpr
+):
+    start_m = tl.program_id(0)
+    off_hz = tl.program_id(1)
+
+    off_b = off_hz // H
+    off_h = off_hz % H
+
+    q_base = Q + off_b * stride_qz + off_h * stride_qh
+    k_msb_base = K_MSB + off_b * stride_kz + off_h * stride_kh
+    k_lsb_base = K_LSB + off_b * stride_kz + off_h * stride_kh
+    v_base = V + off_b * stride_vz + off_h * stride_vh
+    out_base = Out + off_b * stride_oz + off_h * stride_oh
+
+    offs_m = start_m * BLOCK_M + tl.arange(0, BLOCK_M)
+    offs_n = tl.arange(0, BLOCK_N)
+    offs_d = tl.arange(0, d_model)
+
+    q_ptrs = q_base + offs_m[:, None] * stride_qm + offs_d[None, :] * stride_qk
+    qi = tl.load(q_ptrs, mask=offs_m[:, None] < N_CTX_Q, other=0.0)
+
+    m_i = tl.zeros([BLOCK_M], dtype=tl.float32) - float('inf')
+    l_i = tl.zeros([BLOCK_M], dtype=tl.float32)
+    acc = tl.zeros([BLOCK_M, d_model], dtype=tl.float32)
+
+    for j in range(0, tl.cdiv(N_CTX_K, BLOCK_N)):
+        cur_n = j * BLOCK_N
+        offs_n_curr = cur_n + offs_n
+
+        k_msb_ptrs = k_msb_base + offs_n_curr[:, None] * stride_kn + offs_d[None, :] * stride_kk
+        k_msb = tl.load(k_msb_ptrs, mask=offs_n_curr[:, None] < N_CTX_K, other=0.0)
+
+        qk = tl.dot(qi, tl.trans(k_msb)) * sm_scale
+
+        max_score = tl.max(qk)
+        if max_score < quant_threshold:
+            k_lsb_ptrs = k_lsb_base + offs_n_curr[:, None] * stride_kn + offs_d[None, :] * stride_kk
+            k_lsb = tl.load(k_lsb_ptrs, mask=offs_n_curr[:, None] < N_CTX_K, other=0.0)
+            qk += tl.dot(qi, tl.trans(k_lsb)) * sm_scale
+
+        m_ij = tl.max(qk, 1)
+        p = tl.exp(qk - m_ij[:, None])
+
+        m_next = tl.maximum(m_i, m_ij)
+        alpha = tl.exp(m_i - m_next)
+        beta = tl.exp(m_ij - m_next)
+
+        max_p_for_v = tl.max(p, axis=0)
+        l_ij = tl.sum(p, 1)
+        l_i_new = l_i * alpha + l_ij * beta
+        acc_new = acc * alpha[:, None]
+
+        skip_v = tl.max(max_p_for_v) <= v_threshold
+        if skip_v:
+            acc = acc_new
+        else:
+            v_load_mask = max_p_for_v > v_threshold
+            v_mask_2d = v_load_mask[:, None] & (offs_n_curr[:, None] < N_CTX_K)
+
+            v_ptrs = v_base + offs_n_curr[:, None] * stride_vn + offs_d[None, :] * stride_vk
+            v = tl.load(v_ptrs, mask=v_mask_2d, other=0.0)
+
+            p_pruned = tl.where(p > v_threshold, p, 0.0)
+            p_scaled = p_pruned * beta[:, None]
+            acc = tl.dot(p_scaled.to(tl.float16), v.to(tl.float16), acc_new)
+
+        l_i = l_i_new
+        m_i = m_next
+
+    acc = acc / l_i[:, None]
+    out_ptrs = out_base + offs_m[:, None] * stride_om + offs_d[None, :] * stride_ok
+    tl.store(out_ptrs, acc.to(Out.type.element_ty), mask=offs_m[:, None] < N_CTX_Q)
+
+
 
 def triton_progressive_qk(q, k_msb, k_lsb, v, threshold, sm_scale, meta=None):
     Z, H, M, D = q.shape
@@ -381,7 +466,18 @@ def triton_fused_spatten_v_prune(q, k, v, v_threshold, sm_scale, meta=None):
     )
     return out
 
-def triton_fused_spatten_ultimate(q, k_msb, k_lsb, v, out_sum, quant_threshold, v_threshold, sm_scale, meta=None):
+def triton_fused_spatten_ultimate(
+    q,
+    k_msb,
+    k_lsb,
+    v,
+    out_sum,
+    quant_threshold,
+    v_threshold,
+    sm_scale,
+    meta=None,
+    collect_stats=False,
+):
     Z, H, M, D = q.shape
     _, _, N, _ = k_msb.shape
     out = torch.empty_like(q)
@@ -391,17 +487,30 @@ def triton_fused_spatten_ultimate(q, k_msb, k_lsb, v, out_sum, quant_threshold, 
     BLOCK_N = config["BLOCK_N"]
     grid = (triton.cdiv(M, BLOCK_M), Z * H)
 
-    _spatten_fused_ultimate_kernel[grid](
-        q, k_msb, k_lsb, v, out, out_sum,
-        q.stride(0), q.stride(1), q.stride(2), q.stride(3),
-        k_msb.stride(0), k_msb.stride(1), k_msb.stride(2), k_msb.stride(3),
-        v.stride(0), v.stride(1), v.stride(2), v.stride(3),
-        out.stride(0), out.stride(1), out.stride(2), out.stride(3),
-        Z, H, M, N,
-        sm_scale, quant_threshold, v_threshold,
-        BLOCK_M=BLOCK_M, BLOCK_N=BLOCK_N, d_model=D,
-        num_warps=config["num_warps"], num_stages=config["num_stages"]
-    )
+    if collect_stats:
+        _spatten_fused_ultimate_kernel[grid](
+            q, k_msb, k_lsb, v, out, out_sum,
+            q.stride(0), q.stride(1), q.stride(2), q.stride(3),
+            k_msb.stride(0), k_msb.stride(1), k_msb.stride(2), k_msb.stride(3),
+            v.stride(0), v.stride(1), v.stride(2), v.stride(3),
+            out.stride(0), out.stride(1), out.stride(2), out.stride(3),
+            Z, H, M, N,
+            sm_scale, quant_threshold, v_threshold,
+            BLOCK_M=BLOCK_M, BLOCK_N=BLOCK_N, d_model=D,
+            num_warps=config["num_warps"], num_stages=config["num_stages"]
+        )
+    else:
+        _spatten_fused_ultimate_nostats_kernel[grid](
+            q, k_msb, k_lsb, v, out,
+            q.stride(0), q.stride(1), q.stride(2), q.stride(3),
+            k_msb.stride(0), k_msb.stride(1), k_msb.stride(2), k_msb.stride(3),
+            v.stride(0), v.stride(1), v.stride(2), v.stride(3),
+            out.stride(0), out.stride(1), out.stride(2), out.stride(3),
+            Z, H, M, N,
+            sm_scale, quant_threshold, v_threshold,
+            BLOCK_M=BLOCK_M, BLOCK_N=BLOCK_N, d_model=D,
+            num_warps=config["num_warps"], num_stages=config["num_stages"]
+        )
     return out
 
 # ========================================================
@@ -486,7 +595,8 @@ class SpattenBertSelfAttention(BertSelfAttention):
                 query_layer, k_msb, k_lsb, value_layer, out_sum, # 传入 buffer
                 quant_threshold=self.quant_threshold,
                 v_threshold=0.05,
-                sm_scale=sm_scale
+                sm_scale=sm_scale,
+                collect_stats=True,
             )
             current_token_importance = out_sum.sum(dim=1) # [B, S_Q]
             op = False

@@ -15,8 +15,10 @@ try:
 except ImportError:  # pragma: no cover
     OutOfResources = RuntimeError
 
+
 def parse_int_list(raw_value):
     return [int(item.strip()) for item in raw_value.split(",") if item.strip()]
+
 
 def build_meta_candidates(block_ms, block_ns, num_warps, num_stages):
     return [
@@ -24,7 +26,7 @@ def build_meta_candidates(block_ms, block_ns, num_warps, num_stages):
             "BLOCK_M": block_m,
             "BLOCK_N": block_n,
             "num_warps": warps,
-            "num_stages": stages
+            "num_stages": stages,
         }
         for block_m, block_n, warps, stages in product(block_ms, block_ns, num_warps, num_stages)
     ]
@@ -38,23 +40,29 @@ def allocate_inputs(batch, heads, seq_q, seq_k, head_dim, dtype, device):
     out_sum = torch.zeros((batch, heads, seq_q), device=device, dtype=torch.float32)
     return q, k_msb, k_lsb, v, out_sum
 
+
 def benchmark_sdpa(q, k, v):
-    return triton.testing.do_bench(lambda: torch.nn.functional.scaled_dot_product_attention(q, k, v))
+    return triton.testing.do_bench(
+        lambda: torch.nn.functional.scaled_dot_product_attention(q, k, v)
+    )
+
 
 def benchmark_ultimate(q, k_msb, k_lsb, v, out_sum, quant_threshold, v_threshold, sm_scale, meta):
     return triton.testing.do_bench(
         lambda: triton_fused_spatten_ultimate(
-            q, 
-            k_msb, 
-            k_lsb, 
-            v, 
-            out_sum, 
-            quant_threshold, 
-            v_threshold, 
-            sm_scale, 
-            meta
+            q,
+            k_msb,
+            k_lsb,
+            v,
+            out_sum,
+            quant_threshold,
+            v_threshold,
+            sm_scale,
+            meta=meta,
+            collect_stats=False,
         )
     )
+
 
 def summarize_recommendation(results, default_meta):
     best = results[0]
@@ -66,6 +74,7 @@ def summarize_recommendation(results, default_meta):
         "Best candidate differs from the current default, which points to launch-meta mismatch. "
         f"Promote {best['meta']} into the next ablation pass; worst-to-best spread is {spread:.2f}%."
     )
+
 
 def main():
     parser = argparse.ArgumentParser(description="Route-B meta scan for the SpAtten fused Triton kernel.")
@@ -98,9 +107,8 @@ def main():
         seq_k=args.seq_k,
         head_dim=args.head_dim,
         dtype=dtype,
-        device=device
+        device=device,
     )
-
     sm_scale = 1.0 / math.sqrt(args.head_dim)
 
     default_meta = dict(TRITON_META_DEFAULTS["ultimate"])
@@ -108,7 +116,7 @@ def main():
         parse_int_list(args.block_m_list),
         parse_int_list(args.block_n_list),
         parse_int_list(args.num_warps_list),
-        parse_int_list(args.num_stages_list)
+        parse_int_list(args.num_stages_list),
     )
 
     sdpa_ms = benchmark_sdpa(q, k_msb, v)
@@ -181,7 +189,7 @@ def main():
     }
     output_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
-    print("Route-B Meta Scan")
+    print("Meta Scan")
     print(f"Device: {payload['device']}")
     print(f"Shape: B={args.batch}, H={args.heads}, M={args.seq_q}, N={args.seq_k}, D={args.head_dim}")
     print(f"SDPA baseline: {sdpa_ms:.4f} ms")

@@ -1,0 +1,333 @@
+{
+  "timestamp": "20260406_211211",
+  "device": "NVIDIA GeForce RTX 3090",
+  "shape": {
+    "batch": 1,
+    "heads": 12,
+    "seq_q": 4096,
+    "seq_k": 4096,
+    "head_dim": 64
+  },
+  "dtype": "float16",
+  "meta": {
+    "BLOCK_M": 128,
+    "BLOCK_N": 64,
+    "num_warps": 4,
+    "num_stages": 1
+  },
+  "default_quant_threshold": 0.05,
+  "default_v_threshold": 0.01,
+  "recommendation": "Best thresholds differ from the current defaults, which means branch selectivity still matters. Promote quant_threshold=0.0 and v_threshold=0.0 into the next benchmark pass.",
+  "quant_sweep_summary": [
+    {
+      "quant_threshold": 0.0,
+      "best_partner_threshold": 0.0,
+      "triton_ms": 1.097457,
+      "slowdown_vs_attention_only": 1.294476
+    },
+    {
+      "quant_threshold": 0.01,
+      "best_partner_threshold": 0.05,
+      "triton_ms": 1.103021,
+      "slowdown_vs_attention_only": 1.301039
+    },
+    {
+      "quant_threshold": 0.03,
+      "best_partner_threshold": 0.05,
+      "triton_ms": 1.102833,
+      "slowdown_vs_attention_only": 1.300818
+    },
+    {
+      "quant_threshold": 0.05,
+      "best_partner_threshold": 0.005,
+      "triton_ms": 1.103596,
+      "slowdown_vs_attention_only": 1.301718
+    },
+    {
+      "quant_threshold": 0.08,
+      "best_partner_threshold": 0.005,
+      "triton_ms": 1.104259,
+      "slowdown_vs_attention_only": 1.3025
+    },
+    {
+      "quant_threshold": 0.1,
+      "best_partner_threshold": 0.05,
+      "triton_ms": 1.104849,
+      "slowdown_vs_attention_only": 1.303196
+    }
+  ],
+  "v_sweep_summary": [
+    {
+      "v_threshold": 0.0,
+      "best_partner_threshold": 0.0,
+      "triton_ms": 1.097457,
+      "slowdown_vs_attention_only": 1.294476
+    },
+    {
+      "v_threshold": 0.005,
+      "best_partner_threshold": 0.05,
+      "triton_ms": 1.103596,
+      "slowdown_vs_attention_only": 1.301718
+    },
+    {
+      "v_threshold": 0.01,
+      "best_partner_threshold": 0.0,
+      "triton_ms": 1.102271,
+      "slowdown_vs_attention_only": 1.300154
+    },
+    {
+      "v_threshold": 0.02,
+      "best_partner_threshold": 0.05,
+      "triton_ms": 1.104103,
+      "slowdown_vs_attention_only": 1.302316
+    },
+    {
+      "v_threshold": 0.05,
+      "best_partner_threshold": 0.03,
+      "triton_ms": 1.102833,
+      "slowdown_vs_attention_only": 1.300818
+    }
+  ],
+  "results": [
+    {
+      "quant_threshold": 0.0,
+      "v_threshold": 0.0,
+      "triton_ms": 1.097457,
+      "attention_only_ms": 0.8478,
+      "slowdown_vs_attention_only": 1.294476,
+      "delta_vs_default_threshold_ms": -0.008852
+    },
+    {
+      "quant_threshold": 0.0,
+      "v_threshold": 0.01,
+      "triton_ms": 1.102271,
+      "attention_only_ms": 0.8478,
+      "slowdown_vs_attention_only": 1.300154,
+      "delta_vs_default_threshold_ms": -0.004038
+    },
+    {
+      "quant_threshold": 0.03,
+      "v_threshold": 0.05,
+      "triton_ms": 1.102833,
+      "attention_only_ms": 0.8478,
+      "slowdown_vs_attention_only": 1.300818,
+      "delta_vs_default_threshold_ms": -0.003476
+    },
+    {
+      "quant_threshold": 0.01,
+      "v_threshold": 0.05,
+      "triton_ms": 1.103021,
+      "attention_only_ms": 0.8478,
+      "slowdown_vs_attention_only": 1.301039,
+      "delta_vs_default_threshold_ms": -0.003288
+    },
+    {
+      "quant_threshold": 0.01,
+      "v_threshold": 0.0,
+      "triton_ms": 1.103596,
+      "attention_only_ms": 0.8478,
+      "slowdown_vs_attention_only": 1.301718,
+      "delta_vs_default_threshold_ms": -0.002713
+    },
+    {
+      "quant_threshold": 0.05,
+      "v_threshold": 0.005,
+      "triton_ms": 1.103596,
+      "attention_only_ms": 0.8478,
+      "slowdown_vs_attention_only": 1.301718,
+      "delta_vs_default_threshold_ms": -0.002713
+    },
+    {
+      "quant_threshold": 0.05,
+      "v_threshold": 0.02,
+      "triton_ms": 1.104103,
+      "attention_only_ms": 0.8478,
+      "slowdown_vs_attention_only": 1.302316,
+      "delta_vs_default_threshold_ms": -0.002206
+    },
+    {
+      "quant_threshold": 0.03,
+      "v_threshold": 0.01,
+      "triton_ms": 1.104246,
+      "attention_only_ms": 0.8478,
+      "slowdown_vs_attention_only": 1.302484,
+      "delta_vs_default_threshold_ms": -0.002063
+    },
+    {
+      "quant_threshold": 0.08,
+      "v_threshold": 0.005,
+      "triton_ms": 1.104259,
+      "attention_only_ms": 0.8478,
+      "slowdown_vs_attention_only": 1.3025,
+      "delta_vs_default_threshold_ms": -0.00205
+    },
+    {
+      "quant_threshold": 0.0,
+      "v_threshold": 0.02,
+      "triton_ms": 1.104292,
+      "attention_only_ms": 0.8478,
+      "slowdown_vs_attention_only": 1.302539,
+      "delta_vs_default_threshold_ms": -0.002017
+    },
+    {
+      "quant_threshold": 0.05,
+      "v_threshold": 0.05,
+      "triton_ms": 1.104374,
+      "attention_only_ms": 0.8478,
+      "slowdown_vs_attention_only": 1.302636,
+      "delta_vs_default_threshold_ms": -0.001935
+    },
+    {
+      "quant_threshold": 0.0,
+      "v_threshold": 0.05,
+      "triton_ms": 1.104376,
+      "attention_only_ms": 0.8478,
+      "slowdown_vs_attention_only": 1.302638,
+      "delta_vs_default_threshold_ms": -0.001933
+    },
+    {
+      "quant_threshold": 0.1,
+      "v_threshold": 0.05,
+      "triton_ms": 1.104849,
+      "attention_only_ms": 0.8478,
+      "slowdown_vs_attention_only": 1.303196,
+      "delta_vs_default_threshold_ms": -0.00146
+    },
+    {
+      "quant_threshold": 0.03,
+      "v_threshold": 0.005,
+      "triton_ms": 1.104936,
+      "attention_only_ms": 0.8478,
+      "slowdown_vs_attention_only": 1.303298,
+      "delta_vs_default_threshold_ms": -0.001373
+    },
+    {
+      "quant_threshold": 0.08,
+      "v_threshold": 0.0,
+      "triton_ms": 1.104954,
+      "attention_only_ms": 0.8478,
+      "slowdown_vs_attention_only": 1.303319,
+      "delta_vs_default_threshold_ms": -0.001355
+    },
+    {
+      "quant_threshold": 0.1,
+      "v_threshold": 0.0,
+      "triton_ms": 1.105385,
+      "attention_only_ms": 0.8478,
+      "slowdown_vs_attention_only": 1.303828,
+      "delta_vs_default_threshold_ms": -0.000924
+    },
+    {
+      "quant_threshold": 0.0,
+      "v_threshold": 0.005,
+      "triton_ms": 1.105429,
+      "attention_only_ms": 0.8478,
+      "slowdown_vs_attention_only": 1.303879,
+      "delta_vs_default_threshold_ms": -0.00088
+    },
+    {
+      "quant_threshold": 0.03,
+      "v_threshold": 0.0,
+      "triton_ms": 1.105559,
+      "attention_only_ms": 0.8478,
+      "slowdown_vs_attention_only": 1.304034,
+      "delta_vs_default_threshold_ms": -0.00075
+    },
+    {
+      "quant_threshold": 0.05,
+      "v_threshold": 0.01,
+      "triton_ms": 1.106309,
+      "attention_only_ms": 0.8478,
+      "slowdown_vs_attention_only": 1.304917,
+      "delta_vs_default_threshold_ms": 0.0
+    },
+    {
+      "quant_threshold": 0.08,
+      "v_threshold": 0.02,
+      "triton_ms": 1.106446,
+      "attention_only_ms": 0.8478,
+      "slowdown_vs_attention_only": 1.305079,
+      "delta_vs_default_threshold_ms": 0.000137
+    },
+    {
+      "quant_threshold": 0.03,
+      "v_threshold": 0.02,
+      "triton_ms": 1.106584,
+      "attention_only_ms": 0.8478,
+      "slowdown_vs_attention_only": 1.305242,
+      "delta_vs_default_threshold_ms": 0.000275
+    },
+    {
+      "quant_threshold": 0.01,
+      "v_threshold": 0.02,
+      "triton_ms": 1.10661,
+      "attention_only_ms": 0.8478,
+      "slowdown_vs_attention_only": 1.305273,
+      "delta_vs_default_threshold_ms": 0.000301
+    },
+    {
+      "quant_threshold": 0.01,
+      "v_threshold": 0.01,
+      "triton_ms": 1.108643,
+      "attention_only_ms": 0.8478,
+      "slowdown_vs_attention_only": 1.307671,
+      "delta_vs_default_threshold_ms": 0.002334
+    },
+    {
+      "quant_threshold": 0.01,
+      "v_threshold": 0.005,
+      "triton_ms": 1.108807,
+      "attention_only_ms": 0.8478,
+      "slowdown_vs_attention_only": 1.307864,
+      "delta_vs_default_threshold_ms": 0.002498
+    },
+    {
+      "quant_threshold": 0.1,
+      "v_threshold": 0.01,
+      "triton_ms": 1.110793,
+      "attention_only_ms": 0.8478,
+      "slowdown_vs_attention_only": 1.310207,
+      "delta_vs_default_threshold_ms": 0.004484
+    },
+    {
+      "quant_threshold": 0.08,
+      "v_threshold": 0.01,
+      "triton_ms": 1.112051,
+      "attention_only_ms": 0.8478,
+      "slowdown_vs_attention_only": 1.31169,
+      "delta_vs_default_threshold_ms": 0.005742
+    },
+    {
+      "quant_threshold": 0.08,
+      "v_threshold": 0.05,
+      "triton_ms": 1.112064,
+      "attention_only_ms": 0.8478,
+      "slowdown_vs_attention_only": 1.311706,
+      "delta_vs_default_threshold_ms": 0.005755
+    },
+    {
+      "quant_threshold": 0.1,
+      "v_threshold": 0.02,
+      "triton_ms": 1.112152,
+      "attention_only_ms": 0.8478,
+      "slowdown_vs_attention_only": 1.311809,
+      "delta_vs_default_threshold_ms": 0.005843
+    },
+    {
+      "quant_threshold": 0.1,
+      "v_threshold": 0.005,
+      "triton_ms": 1.112452,
+      "attention_only_ms": 0.8478,
+      "slowdown_vs_attention_only": 1.312164,
+      "delta_vs_default_threshold_ms": 0.006143
+    },
+    {
+      "quant_threshold": 0.05,
+      "v_threshold": 0.0,
+      "triton_ms": 1.112498,
+      "attention_only_ms": 0.8478,
+      "slowdown_vs_attention_only": 1.312218,
+      "delta_vs_default_threshold_ms": 0.006189
+    }
+  ]
+}
