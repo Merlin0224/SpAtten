@@ -54,7 +54,7 @@ def main():
     config.max_position_embeddings = 32768  # 突破默认的 512 限制
     
     print("Building models (using random weights for performance profiling)...")
-    original_model = BertModel(config).to(device).half().eval()
+    original_model = BertModel(config).to(device).eval()
     spatten_model = copy.deepcopy(original_model)
 
     # 替换 SpAtten 模块
@@ -63,7 +63,7 @@ def main():
         layer.attention.self = new_attn
     
     spatten_model.encoder.forward = spatten_encoder_forward.__get__(spatten_model.encoder, BertEncoder)
-    spatten_model.to(device).half().eval()
+    spatten_model.to(device).eval()
 
     # 测试的序列长度列表
     seq_lengths =[128, 256, 512, 1024, 2048, 4096, 8192]

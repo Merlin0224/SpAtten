@@ -15,6 +15,40 @@ import triton.language as tl
 
 from module import slice_linear_weights, spatten_encoder_forward
 
+TRITON_META_DEFAULTS = {
+    "progressive_qk":{
+        "BLOCK_M": 32,
+        "BLOCK_N": 32,
+        "num_warps": 4,
+        "num_stages": 1,
+    },
+    "v_prune":{
+        "BLOCK_M": 32,
+        "BLOCK_N": 32,
+        "num_warps": 4,
+        "num_stages": 2,
+    },
+    "ultimate":{
+        "BLOCK_M": 64,
+        "BLOCK_N": 64,
+        "num_warps": 8,
+        "num_stages": 3,
+    }
+}
+
+def _resolve_triton_meta(path_name, meta=None):
+    config = dict(TRITON_META_DEFAULTS[path_name])
+    if meta is None:
+        return config
+
+    unknown_keys = sorted(set(meta) - set(config))
+    if unknown_keys:
+        raise ValueError(f"Unknown Triton meta keys for {path_name}: {unknown_keys}")
+
+    config.update(meta)
+    return config
+
+
 # =====================================================================
 # Triton 渐进式量化 Kernel (Progressive Quantization) 和 FlashAttention
 # =====================================================================
@@ -300,12 +334,14 @@ def _spatten_fused_ultimate_kernel(
 
 
 
-def triton_progressive_qk(q, k_msb, k_lsb, v, threshold, sm_scale):
+def triton_progressive_qk(q, k_msb, k_lsb, v, threshold, sm_scale, meta=None):
     Z, H, M, D = q.shape
     _, _, N, _ = k_msb.shape
     out = torch.empty_like(q)
 
-    BLOCK_M, BLOCK_N = 32, 32
+    config = _resolve_triton_meta("progressive_qk", meta)
+    BLOCK_M = config["BLOCK_M"]
+    BLOCK_N = config["BLOCK_N"]
     grid = (triton.cdiv(M, BLOCK_M), Z * H)
 
     _progressive_qk_kernel[grid](
@@ -317,17 +353,19 @@ def triton_progressive_qk(q, k_msb, k_lsb, v, threshold, sm_scale):
         Z, H, M, N,
         sm_scale, threshold,
         BLOCK_M=BLOCK_M, BLOCK_N=BLOCK_N, d_model=D,
-        num_warps=4, num_stages=1
+        num_warps=config["num_warps"], num_stages=config["num_stages"]
     )
     return out
 
 
-def triton_fused_spatten_v_prune(q, k, v, v_threshold, sm_scale):
+def triton_fused_spatten_v_prune(q, k, v, v_threshold, sm_scale, meta=None):
     Z, H, M, D = q.shape
     _, _, N, _ = k.shape
     out = torch.empty_like(q)
 
-    BLOCK_M, BLOCK_N = 32, 32
+    config = _resolve_triton_meta("v_prune", meta)
+    BLOCK_M = config["BLOCK_M"]
+    BLOCK_N = config["BLOCK_N"]
     grid = (triton.cdiv(M, BLOCK_M), Z * H)
 
     _spatten_v_prune_kernel[grid](
@@ -339,16 +377,18 @@ def triton_fused_spatten_v_prune(q, k, v, v_threshold, sm_scale):
         Z, H, M, N,
         sm_scale, v_threshold,
         BLOCK_M=BLOCK_M, BLOCK_N=BLOCK_N, BLOCK_D=D,
-        num_warps=4, num_stages=2
+        num_warps=config["num_warps"], num_stages=config["num_stages"]
     )
     return out
 
-def triton_fused_spatten_ultimate(q, k_msb, k_lsb, v, out_sum, quant_threshold, v_threshold, sm_scale):
+def triton_fused_spatten_ultimate(q, k_msb, k_lsb, v, out_sum, quant_threshold, v_threshold, sm_scale, meta=None):
     Z, H, M, D = q.shape
     _, _, N, _ = k_msb.shape
     out = torch.empty_like(q)
 
-    BLOCK_M, BLOCK_N = 64, 64
+    config = _resolve_triton_meta("ultimate", meta)
+    BLOCK_M = config["BLOCK_M"]
+    BLOCK_N = config["BLOCK_N"]
     grid = (triton.cdiv(M, BLOCK_M), Z * H)
 
     _spatten_fused_ultimate_kernel[grid](
@@ -360,7 +400,7 @@ def triton_fused_spatten_ultimate(q, k_msb, k_lsb, v, out_sum, quant_threshold, 
         Z, H, M, N,
         sm_scale, quant_threshold, v_threshold,
         BLOCK_M=BLOCK_M, BLOCK_N=BLOCK_N, d_model=D,
-        num_warps=8, num_stages=3
+        num_warps=config["num_warps"], num_stages=config["num_stages"]
     )
     return out
 
