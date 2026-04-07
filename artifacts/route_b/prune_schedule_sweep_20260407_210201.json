@@ -1,0 +1,607 @@
+{
+  "timestamp": "20260407_210201",
+  "device": "NVIDIA GeForce RTX 3090",
+  "model_source": "synthetic BertConfig() weights (max_position_embeddings=8194)",
+  "input_source": "synthetic exact-length token ids (seq_len=8192)",
+  "seq_len": 8192,
+  "mode": "full",
+  "warmup": 10,
+  "iters": 30,
+  "token_prune_num": 1,
+  "head_prune_num": 1,
+  "quant_threshold": 0.0,
+  "v_threshold": 0.05,
+  "enable_head_prune": true,
+  "enable_token_prune": true,
+  "baseline": {
+    "ms": 437.262956,
+    "mode": "baseline"
+  },
+  "results": [
+    {
+      "ms": 133.286808,
+      "mode": "full",
+      "head_prune_start_layer": 0,
+      "token_prune_start_layer": 6,
+      "head_prune_interval": 1,
+      "token_prune_interval": 2,
+      "speedup_vs_baseline": 3.280617
+    },
+    {
+      "ms": 133.295923,
+      "mode": "full",
+      "head_prune_start_layer": 0,
+      "token_prune_start_layer": 0,
+      "head_prune_interval": 1,
+      "token_prune_interval": 2,
+      "speedup_vs_baseline": 3.280393
+    },
+    {
+      "ms": 133.354362,
+      "mode": "full",
+      "head_prune_start_layer": 0,
+      "token_prune_start_layer": 4,
+      "head_prune_interval": 1,
+      "token_prune_interval": 2,
+      "speedup_vs_baseline": 3.278955
+    },
+    {
+      "ms": 133.452083,
+      "mode": "full",
+      "head_prune_start_layer": 0,
+      "token_prune_start_layer": 2,
+      "head_prune_interval": 1,
+      "token_prune_interval": 2,
+      "speedup_vs_baseline": 3.276554
+    },
+    {
+      "ms": 133.937899,
+      "mode": "full",
+      "head_prune_start_layer": 0,
+      "token_prune_start_layer": 6,
+      "head_prune_interval": 1,
+      "token_prune_interval": 1,
+      "speedup_vs_baseline": 3.264669
+    },
+    {
+      "ms": 134.312004,
+      "mode": "full",
+      "head_prune_start_layer": 0,
+      "token_prune_start_layer": 4,
+      "head_prune_interval": 1,
+      "token_prune_interval": 1,
+      "speedup_vs_baseline": 3.255576
+    },
+    {
+      "ms": 134.440479,
+      "mode": "full",
+      "head_prune_start_layer": 0,
+      "token_prune_start_layer": 0,
+      "head_prune_interval": 1,
+      "token_prune_interval": 1,
+      "speedup_vs_baseline": 3.252465
+    },
+    {
+      "ms": 134.936816,
+      "mode": "full",
+      "head_prune_start_layer": 0,
+      "token_prune_start_layer": 2,
+      "head_prune_interval": 1,
+      "token_prune_interval": 1,
+      "speedup_vs_baseline": 3.240502
+    },
+    {
+      "ms": 149.727539,
+      "mode": "full",
+      "head_prune_start_layer": 2,
+      "token_prune_start_layer": 6,
+      "head_prune_interval": 1,
+      "token_prune_interval": 2,
+      "speedup_vs_baseline": 2.920391
+    },
+    {
+      "ms": 149.970231,
+      "mode": "full",
+      "head_prune_start_layer": 2,
+      "token_prune_start_layer": 4,
+      "head_prune_interval": 1,
+      "token_prune_interval": 2,
+      "speedup_vs_baseline": 2.915665
+    },
+    {
+      "ms": 149.974495,
+      "mode": "full",
+      "head_prune_start_layer": 2,
+      "token_prune_start_layer": 6,
+      "head_prune_interval": 1,
+      "token_prune_interval": 1,
+      "speedup_vs_baseline": 2.915582
+    },
+    {
+      "ms": 150.313477,
+      "mode": "full",
+      "head_prune_start_layer": 2,
+      "token_prune_start_layer": 2,
+      "head_prune_interval": 1,
+      "token_prune_interval": 2,
+      "speedup_vs_baseline": 2.909007
+    },
+    {
+      "ms": 150.741406,
+      "mode": "full",
+      "head_prune_start_layer": 2,
+      "token_prune_start_layer": 0,
+      "head_prune_interval": 1,
+      "token_prune_interval": 2,
+      "speedup_vs_baseline": 2.900749
+    },
+    {
+      "ms": 150.973128,
+      "mode": "full",
+      "head_prune_start_layer": 2,
+      "token_prune_start_layer": 4,
+      "head_prune_interval": 1,
+      "token_prune_interval": 1,
+      "speedup_vs_baseline": 2.896297
+    },
+    {
+      "ms": 151.297428,
+      "mode": "full",
+      "head_prune_start_layer": 2,
+      "token_prune_start_layer": 2,
+      "head_prune_interval": 1,
+      "token_prune_interval": 1,
+      "speedup_vs_baseline": 2.890088
+    },
+    {
+      "ms": 151.605632,
+      "mode": "full",
+      "head_prune_start_layer": 2,
+      "token_prune_start_layer": 0,
+      "head_prune_interval": 1,
+      "token_prune_interval": 1,
+      "speedup_vs_baseline": 2.884213
+    },
+    {
+      "ms": 156.077946,
+      "mode": "full",
+      "head_prune_start_layer": 0,
+      "token_prune_start_layer": 6,
+      "head_prune_interval": 2,
+      "token_prune_interval": 2,
+      "speedup_vs_baseline": 2.801568
+    },
+    {
+      "ms": 156.311312,
+      "mode": "full",
+      "head_prune_start_layer": 0,
+      "token_prune_start_layer": 4,
+      "head_prune_interval": 2,
+      "token_prune_interval": 2,
+      "speedup_vs_baseline": 2.797385
+    },
+    {
+      "ms": 156.320459,
+      "mode": "full",
+      "head_prune_start_layer": 0,
+      "token_prune_start_layer": 2,
+      "head_prune_interval": 2,
+      "token_prune_interval": 2,
+      "speedup_vs_baseline": 2.797222
+    },
+    {
+      "ms": 156.845361,
+      "mode": "full",
+      "head_prune_start_layer": 0,
+      "token_prune_start_layer": 6,
+      "head_prune_interval": 2,
+      "token_prune_interval": 1,
+      "speedup_vs_baseline": 2.78786
+    },
+    {
+      "ms": 156.901546,
+      "mode": "full",
+      "head_prune_start_layer": 0,
+      "token_prune_start_layer": 0,
+      "head_prune_interval": 2,
+      "token_prune_interval": 2,
+      "speedup_vs_baseline": 2.786862
+    },
+    {
+      "ms": 157.254899,
+      "mode": "full",
+      "head_prune_start_layer": 0,
+      "token_prune_start_layer": 4,
+      "head_prune_interval": 2,
+      "token_prune_interval": 1,
+      "speedup_vs_baseline": 2.7806
+    },
+    {
+      "ms": 157.338379,
+      "mode": "full",
+      "head_prune_start_layer": 0,
+      "token_prune_start_layer": 2,
+      "head_prune_interval": 2,
+      "token_prune_interval": 1,
+      "speedup_vs_baseline": 2.779125
+    },
+    {
+      "ms": 158.27627,
+      "mode": "full",
+      "head_prune_start_layer": 0,
+      "token_prune_start_layer": 0,
+      "head_prune_interval": 2,
+      "token_prune_interval": 1,
+      "speedup_vs_baseline": 2.762656
+    },
+    {
+      "ms": 162.025684,
+      "mode": "full",
+      "head_prune_start_layer": 4,
+      "token_prune_start_layer": 6,
+      "head_prune_interval": 1,
+      "token_prune_interval": 2,
+      "speedup_vs_baseline": 2.698726
+    },
+    {
+      "ms": 162.237402,
+      "mode": "full",
+      "head_prune_start_layer": 4,
+      "token_prune_start_layer": 4,
+      "head_prune_interval": 1,
+      "token_prune_interval": 2,
+      "speedup_vs_baseline": 2.695204
+    },
+    {
+      "ms": 162.391146,
+      "mode": "full",
+      "head_prune_start_layer": 4,
+      "token_prune_start_layer": 2,
+      "head_prune_interval": 1,
+      "token_prune_interval": 2,
+      "speedup_vs_baseline": 2.692653
+    },
+    {
+      "ms": 162.580306,
+      "mode": "full",
+      "head_prune_start_layer": 4,
+      "token_prune_start_layer": 0,
+      "head_prune_interval": 1,
+      "token_prune_interval": 2,
+      "speedup_vs_baseline": 2.68952
+    },
+    {
+      "ms": 162.617448,
+      "mode": "full",
+      "head_prune_start_layer": 4,
+      "token_prune_start_layer": 6,
+      "head_prune_interval": 1,
+      "token_prune_interval": 1,
+      "speedup_vs_baseline": 2.688906
+    },
+    {
+      "ms": 163.017041,
+      "mode": "full",
+      "head_prune_start_layer": 4,
+      "token_prune_start_layer": 4,
+      "head_prune_interval": 1,
+      "token_prune_interval": 1,
+      "speedup_vs_baseline": 2.682314
+    },
+    {
+      "ms": 163.384831,
+      "mode": "full",
+      "head_prune_start_layer": 4,
+      "token_prune_start_layer": 2,
+      "head_prune_interval": 1,
+      "token_prune_interval": 1,
+      "speedup_vs_baseline": 2.676276
+    },
+    {
+      "ms": 163.94598,
+      "mode": "full",
+      "head_prune_start_layer": 4,
+      "token_prune_start_layer": 0,
+      "head_prune_interval": 1,
+      "token_prune_interval": 1,
+      "speedup_vs_baseline": 2.667116
+    },
+    {
+      "ms": 164.526221,
+      "mode": "full",
+      "head_prune_start_layer": 2,
+      "token_prune_start_layer": 6,
+      "head_prune_interval": 2,
+      "token_prune_interval": 2,
+      "speedup_vs_baseline": 2.65771
+    },
+    {
+      "ms": 164.752767,
+      "mode": "full",
+      "head_prune_start_layer": 2,
+      "token_prune_start_layer": 4,
+      "head_prune_interval": 2,
+      "token_prune_interval": 2,
+      "speedup_vs_baseline": 2.654055
+    },
+    {
+      "ms": 164.897314,
+      "mode": "full",
+      "head_prune_start_layer": 2,
+      "token_prune_start_layer": 2,
+      "head_prune_interval": 2,
+      "token_prune_interval": 2,
+      "speedup_vs_baseline": 2.651729
+    },
+    {
+      "ms": 165.078874,
+      "mode": "full",
+      "head_prune_start_layer": 2,
+      "token_prune_start_layer": 6,
+      "head_prune_interval": 2,
+      "token_prune_interval": 1,
+      "speedup_vs_baseline": 2.648812
+    },
+    {
+      "ms": 165.193799,
+      "mode": "full",
+      "head_prune_start_layer": 2,
+      "token_prune_start_layer": 0,
+      "head_prune_interval": 2,
+      "token_prune_interval": 2,
+      "speedup_vs_baseline": 2.64697
+    },
+    {
+      "ms": 165.749316,
+      "mode": "full",
+      "head_prune_start_layer": 2,
+      "token_prune_start_layer": 4,
+      "head_prune_interval": 2,
+      "token_prune_interval": 1,
+      "speedup_vs_baseline": 2.638098
+    },
+    {
+      "ms": 166.219027,
+      "mode": "full",
+      "head_prune_start_layer": 2,
+      "token_prune_start_layer": 2,
+      "head_prune_interval": 2,
+      "token_prune_interval": 1,
+      "speedup_vs_baseline": 2.630643
+    },
+    {
+      "ms": 166.620085,
+      "mode": "full",
+      "head_prune_start_layer": 2,
+      "token_prune_start_layer": 0,
+      "head_prune_interval": 2,
+      "token_prune_interval": 1,
+      "speedup_vs_baseline": 2.624311
+    },
+    {
+      "ms": 171.136133,
+      "mode": "full",
+      "head_prune_start_layer": 4,
+      "token_prune_start_layer": 6,
+      "head_prune_interval": 2,
+      "token_prune_interval": 2,
+      "speedup_vs_baseline": 2.555059
+    },
+    {
+      "ms": 171.430811,
+      "mode": "full",
+      "head_prune_start_layer": 4,
+      "token_prune_start_layer": 4,
+      "head_prune_interval": 2,
+      "token_prune_interval": 2,
+      "speedup_vs_baseline": 2.550667
+    },
+    {
+      "ms": 171.548535,
+      "mode": "full",
+      "head_prune_start_layer": 4,
+      "token_prune_start_layer": 2,
+      "head_prune_interval": 2,
+      "token_prune_interval": 2,
+      "speedup_vs_baseline": 2.548917
+    },
+    {
+      "ms": 171.896354,
+      "mode": "full",
+      "head_prune_start_layer": 4,
+      "token_prune_start_layer": 6,
+      "head_prune_interval": 2,
+      "token_prune_interval": 1,
+      "speedup_vs_baseline": 2.543759
+    },
+    {
+      "ms": 172.074593,
+      "mode": "full",
+      "head_prune_start_layer": 6,
+      "token_prune_start_layer": 6,
+      "head_prune_interval": 1,
+      "token_prune_interval": 2,
+      "speedup_vs_baseline": 2.541124
+    },
+    {
+      "ms": 172.210173,
+      "mode": "full",
+      "head_prune_start_layer": 4,
+      "token_prune_start_layer": 0,
+      "head_prune_interval": 2,
+      "token_prune_interval": 2,
+      "speedup_vs_baseline": 2.539124
+    },
+    {
+      "ms": 172.24362,
+      "mode": "full",
+      "head_prune_start_layer": 6,
+      "token_prune_start_layer": 4,
+      "head_prune_interval": 1,
+      "token_prune_interval": 2,
+      "speedup_vs_baseline": 2.538631
+    },
+    {
+      "ms": 172.336882,
+      "mode": "full",
+      "head_prune_start_layer": 6,
+      "token_prune_start_layer": 2,
+      "head_prune_interval": 1,
+      "token_prune_interval": 2,
+      "speedup_vs_baseline": 2.537257
+    },
+    {
+      "ms": 172.539665,
+      "mode": "full",
+      "head_prune_start_layer": 4,
+      "token_prune_start_layer": 4,
+      "head_prune_interval": 2,
+      "token_prune_interval": 1,
+      "speedup_vs_baseline": 2.534275
+    },
+    {
+      "ms": 172.616878,
+      "mode": "full",
+      "head_prune_start_layer": 4,
+      "token_prune_start_layer": 2,
+      "head_prune_interval": 2,
+      "token_prune_interval": 1,
+      "speedup_vs_baseline": 2.533141
+    },
+    {
+      "ms": 172.782764,
+      "mode": "full",
+      "head_prune_start_layer": 6,
+      "token_prune_start_layer": 6,
+      "head_prune_interval": 1,
+      "token_prune_interval": 1,
+      "speedup_vs_baseline": 2.530709
+    },
+    {
+      "ms": 172.849658,
+      "mode": "full",
+      "head_prune_start_layer": 6,
+      "token_prune_start_layer": 0,
+      "head_prune_interval": 1,
+      "token_prune_interval": 2,
+      "speedup_vs_baseline": 2.52973
+    },
+    {
+      "ms": 173.25599,
+      "mode": "full",
+      "head_prune_start_layer": 6,
+      "token_prune_start_layer": 4,
+      "head_prune_interval": 1,
+      "token_prune_interval": 1,
+      "speedup_vs_baseline": 2.523797
+    },
+    {
+      "ms": 173.339274,
+      "mode": "full",
+      "head_prune_start_layer": 4,
+      "token_prune_start_layer": 0,
+      "head_prune_interval": 2,
+      "token_prune_interval": 1,
+      "speedup_vs_baseline": 2.522584
+    },
+    {
+      "ms": 173.421908,
+      "mode": "full",
+      "head_prune_start_layer": 6,
+      "token_prune_start_layer": 2,
+      "head_prune_interval": 1,
+      "token_prune_interval": 1,
+      "speedup_vs_baseline": 2.521382
+    },
+    {
+      "ms": 173.91613,
+      "mode": "full",
+      "head_prune_start_layer": 6,
+      "token_prune_start_layer": 0,
+      "head_prune_interval": 1,
+      "token_prune_interval": 1,
+      "speedup_vs_baseline": 2.514217
+    },
+    {
+      "ms": 175.952002,
+      "mode": "full",
+      "head_prune_start_layer": 6,
+      "token_prune_start_layer": 6,
+      "head_prune_interval": 2,
+      "token_prune_interval": 2,
+      "speedup_vs_baseline": 2.485126
+    },
+    {
+      "ms": 176.527327,
+      "mode": "full",
+      "head_prune_start_layer": 6,
+      "token_prune_start_layer": 4,
+      "head_prune_interval": 2,
+      "token_prune_interval": 2,
+      "speedup_vs_baseline": 2.477027
+    },
+    {
+      "ms": 176.801595,
+      "mode": "full",
+      "head_prune_start_layer": 6,
+      "token_prune_start_layer": 0,
+      "head_prune_interval": 2,
+      "token_prune_interval": 2,
+      "speedup_vs_baseline": 2.473184
+    },
+    {
+      "ms": 176.859212,
+      "mode": "full",
+      "head_prune_start_layer": 6,
+      "token_prune_start_layer": 6,
+      "head_prune_interval": 2,
+      "token_prune_interval": 1,
+      "speedup_vs_baseline": 2.472379
+    },
+    {
+      "ms": 177.114551,
+      "mode": "full",
+      "head_prune_start_layer": 6,
+      "token_prune_start_layer": 2,
+      "head_prune_interval": 2,
+      "token_prune_interval": 2,
+      "speedup_vs_baseline": 2.468814
+    },
+    {
+      "ms": 177.685433,
+      "mode": "full",
+      "head_prune_start_layer": 6,
+      "token_prune_start_layer": 4,
+      "head_prune_interval": 2,
+      "token_prune_interval": 1,
+      "speedup_vs_baseline": 2.460882
+    },
+    {
+      "ms": 177.859408,
+      "mode": "full",
+      "head_prune_start_layer": 6,
+      "token_prune_start_layer": 2,
+      "head_prune_interval": 2,
+      "token_prune_interval": 1,
+      "speedup_vs_baseline": 2.458475
+    },
+    {
+      "ms": 178.432178,
+      "mode": "full",
+      "head_prune_start_layer": 6,
+      "token_prune_start_layer": 0,
+      "head_prune_interval": 2,
+      "token_prune_interval": 1,
+      "speedup_vs_baseline": 2.450584
+    }
+  ],
+  "best": {
+    "ms": 133.286808,
+    "mode": "full",
+    "head_prune_start_layer": 0,
+    "token_prune_start_layer": 6,
+    "head_prune_interval": 1,
+    "token_prune_interval": 2,
+    "speedup_vs_baseline": 3.280617
+  }
+}

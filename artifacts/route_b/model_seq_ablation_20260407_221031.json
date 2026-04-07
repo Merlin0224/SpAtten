@@ -1,0 +1,137 @@
+{
+  "timestamp": "20260407_221031",
+  "device": "NVIDIA GeForce RTX 3090",
+  "model_source": "synthetic BertConfig() weights (max_position_embeddings=8194)",
+  "seq_lens": [
+    1024,
+    2048,
+    4096,
+    8192
+  ],
+  "warmup": 10,
+  "iters": 30,
+  "token_prune_num": 1,
+  "head_prune_num": 1,
+  "quant_threshold": 0.01,
+  "v_threshold": 0.05,
+  "head_prune_start_layer": 0,
+  "token_prune_start_layer": 0,
+  "head_prune_interval": 1,
+  "token_prune_interval": 2,
+  "enable_head_prune": true,
+  "enable_token_prune": true,
+  "results": [
+    {
+      "seq_len": 1024,
+      "input_source": "synthetic exact-length token ids (seq_len=1024)",
+      "results": {
+        "baseline": {
+          "ms": 18.381789,
+          "mode": "baseline",
+          "slowdown_vs_baseline": 1.0
+        },
+        "quant_only": {
+          "ms": 18.454767,
+          "mode": "quant_only",
+          "slowdown_vs_baseline": 1.00397
+        },
+        "v_prune_only": {
+          "ms": 16.732604,
+          "mode": "v_prune_only",
+          "slowdown_vs_baseline": 0.910282
+        },
+        "full": {
+          "ms": 19.488257,
+          "mode": "full",
+          "slowdown_vs_baseline": 1.060194
+        }
+      },
+      "best_variant": "v_prune_only",
+      "recommendation": "V-prune-only is the fastest end-to-end SpAtten variant; next step should simplify the fused path so it inherits the standalone V-prune gains."
+    },
+    {
+      "seq_len": 2048,
+      "input_source": "synthetic exact-length token ids (seq_len=2048)",
+      "results": {
+        "baseline": {
+          "ms": 46.607292,
+          "mode": "baseline",
+          "slowdown_vs_baseline": 1.0
+        },
+        "quant_only": {
+          "ms": 27.497164,
+          "mode": "quant_only",
+          "slowdown_vs_baseline": 0.589976
+        },
+        "v_prune_only": {
+          "ms": 26.605363,
+          "mode": "v_prune_only",
+          "slowdown_vs_baseline": 0.570841
+        },
+        "full": {
+          "ms": 27.134328,
+          "mode": "full",
+          "slowdown_vs_baseline": 0.582191
+        }
+      },
+      "best_variant": "v_prune_only",
+      "recommendation": "V-prune-only is the fastest end-to-end SpAtten variant; next step should simplify the fused path so it inherits the standalone V-prune gains."
+    },
+    {
+      "seq_len": 4096,
+      "input_source": "synthetic exact-length token ids (seq_len=4096)",
+      "results": {
+        "baseline": {
+          "ms": 127.728605,
+          "mode": "baseline",
+          "slowdown_vs_baseline": 1.0
+        },
+        "quant_only": {
+          "ms": 58.906592,
+          "mode": "quant_only",
+          "slowdown_vs_baseline": 0.461186
+        },
+        "v_prune_only": {
+          "ms": 56.500598,
+          "mode": "v_prune_only",
+          "slowdown_vs_baseline": 0.442349
+        },
+        "full": {
+          "ms": 56.155786,
+          "mode": "full",
+          "slowdown_vs_baseline": 0.439649
+        }
+      },
+      "best_variant": "full",
+      "recommendation": "Full end-to-end path is the fastest SpAtten variant; next step should target the fused kernel plus Python scheduling overhead together."
+    },
+    {
+      "seq_len": 8192,
+      "input_source": "synthetic exact-length token ids (seq_len=8192)",
+      "results": {
+        "baseline": {
+          "ms": 438.755566,
+          "mode": "baseline",
+          "slowdown_vs_baseline": 1.0
+        },
+        "quant_only": {
+          "ms": 146.640788,
+          "mode": "quant_only",
+          "slowdown_vs_baseline": 0.33422
+        },
+        "v_prune_only": {
+          "ms": 137.653288,
+          "mode": "v_prune_only",
+          "slowdown_vs_baseline": 0.313736
+        },
+        "full": {
+          "ms": 131.009774,
+          "mode": "full",
+          "slowdown_vs_baseline": 0.298594
+        }
+      },
+      "best_variant": "full",
+      "recommendation": "Full end-to-end path is the fastest SpAtten variant; next step should target the fused kernel plus Python scheduling overhead together."
+    }
+  ]
+}

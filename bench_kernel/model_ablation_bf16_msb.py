@@ -21,13 +21,17 @@ def configure_spatten_model(
     mode,
     token_prune_num,
     head_prune_num,
-    quant_threshold=0.05,
+    quant_threshold=0.01,
     v_threshold=0.05,
+    head_prune_start_layer=0,
+    token_prune_start_layer=0,
+    head_prune_interval=1,
+    token_prune_interval=2,
     enable_head_prune=False,
     enable_token_prune=False,
 ):
     spatten_model = copy.deepcopy(base_model)
-    for layer in spatten_model.encoder.layer:
+    for layer_idx, layer in enumerate(spatten_model.encoder.layer):
         orig_state = layer.attention.self.state_dict()
         new_attn = SpattenBertSelfAttention(spatten_model.config)
         new_attn.load_state_dict(orig_state)
@@ -43,6 +47,11 @@ def configure_spatten_model(
         new_attn.quant_threshold = quant_threshold
         new_attn.v_threshold = v_threshold
         new_attn.v_prune_num = 2
+        new_attn.layer_idx = layer_idx
+        new_attn.head_prune_start_layer = head_prune_start_layer
+        new_attn.token_prune_start_layer = token_prune_start_layer
+        new_attn.head_prune_interval = head_prune_interval
+        new_attn.token_prune_interval = token_prune_interval
 
         layer.attention.self = new_attn
 
@@ -60,8 +69,12 @@ def run_variant(
     head_prune_num,
     warmup,
     iters,
-    quant_threshold=0.05,
+    quant_threshold=0.01,
     v_threshold=0.05,
+    head_prune_start_layer=0,
+    token_prune_start_layer=0,
+    head_prune_interval=1,
+    token_prune_interval=2,
     enable_head_prune=False,
     enable_token_prune=False,
 ):
@@ -79,6 +92,10 @@ def run_variant(
         head_prune_num,
         quant_threshold=quant_threshold,
         v_threshold=v_threshold,
+        head_prune_start_layer=head_prune_start_layer,
+        token_prune_start_layer=token_prune_start_layer,
+        head_prune_interval=head_prune_interval,
+        token_prune_interval=token_prune_interval,
         enable_head_prune=enable_head_prune,
         enable_token_prune=enable_token_prune,
     )
@@ -112,8 +129,12 @@ def main():
     parser.add_argument("--iters", type=int, default=50)
     parser.add_argument("--token-prune-num", type=int, default=1)
     parser.add_argument("--head-prune-num", type=int, default=1)
-    parser.add_argument("--quant-threshold", type=float, default=0.05)
+    parser.add_argument("--quant-threshold", type=float, default=0.01)
     parser.add_argument("--v-threshold", type=float, default=0.05)
+    parser.add_argument("--head-prune-start-layer", type=int, default=0)
+    parser.add_argument("--token-prune-start-layer", type=int, default=0)
+    parser.add_argument("--head-prune-interval", type=int, default=1)
+    parser.add_argument("--token-prune-interval", type=int, default=2)
     parser.add_argument("--enable-head-prune", action="store_true")
     parser.add_argument("--enable-token-prune", action="store_true")
     parser.add_argument("--output-dir", default="artifacts/route_b")
@@ -146,6 +167,10 @@ def main():
             args.iters,
             quant_threshold=args.quant_threshold,
             v_threshold=args.v_threshold,
+            head_prune_start_layer=args.head_prune_start_layer,
+            token_prune_start_layer=args.token_prune_start_layer,
+            head_prune_interval=args.head_prune_interval,
+            token_prune_interval=args.token_prune_interval,
             enable_head_prune=args.enable_head_prune,
             enable_token_prune=args.enable_token_prune,
         )
@@ -172,6 +197,10 @@ def main():
         "head_prune_num": args.head_prune_num,
         "quant_threshold": args.quant_threshold,
         "v_threshold": args.v_threshold,
+        "head_prune_start_layer": args.head_prune_start_layer,
+        "token_prune_start_layer": args.token_prune_start_layer,
+        "head_prune_interval": args.head_prune_interval,
+        "token_prune_interval": args.token_prune_interval,
         "enable_head_prune": args.enable_head_prune,
         "enable_token_prune": args.enable_token_prune,
         "results": results,
@@ -197,3 +226,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

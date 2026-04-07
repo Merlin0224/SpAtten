@@ -34,6 +34,20 @@ def slice_linear_weights(linear_layer, active_indices, num_heads, head_dim):
     return w_out, b_out
 
 
+def slice_qkv_weights(query_layer, key_layer, value_layer, active_indices, num_heads, head_dim):
+    """
+    Jointly slice Q/K/V head weights so the caller can run a single packed
+    projection instead of three independent index_select + F.linear paths.
+    """
+    q_w, q_b = slice_linear_weights(query_layer, active_indices, num_heads, head_dim)
+    k_w, k_b = slice_linear_weights(key_layer, active_indices, num_heads, head_dim)
+    v_w, v_b = slice_linear_weights(value_layer, active_indices, num_heads, head_dim)
+
+    packed_w = torch.cat([q_w, k_w, v_w], dim=0).contiguous()
+    packed_b = torch.cat([q_b, k_b, v_b], dim=0).contiguous()
+    return packed_w, packed_b
+
+    
 # ==========================================
 # 级联注入：修改 BertEncoder 循环逻辑
 # ==========================================
@@ -50,18 +64,26 @@ def spatten_encoder_forward(self, hidden_states, attention_mask=None, **kwargs):
 
             # 1. 切片 hidden_states [Batch, Seq, Hidden] -> [Batch, Keep_Seq, Hidden]
             # 扩展索引的维度以匹配 hidden_states
-            expanded_indices = active_token_indices.unsqueeze(-1).expand(-1, -1, hidden_states.size(-1))
-            hidden_states = torch.gather(hidden_states, dim=1, index=expanded_indices)
+            if hidden_states.size(0) == 1:
+                hidden_states = hidden_states.index_select(1, active_token_indices[0])
+            else:
+                expanded_indices = active_token_indices.unsqueeze(-1).expand(-1, -1, hidden_states.size(-1))
+                hidden_states = torch.gather(hidden_states, dim=1, index=expanded_indices)
 
             # 2. 切片 attention_mask [Batch, 1, 1, Seq] -> [Batch, 1, 1, Keep_Seq]
             if attention_mask is not None:
-                mask_indices = active_token_indices.unsqueeze(1).unsqueeze(2)
-                attention_mask = torch.gather(attention_mask, 3, index=mask_indices)
+                if attention_mask.size(0) == 1:
+                    attention_mask = attention_mask.index_select(3, active_token_indices[0])
+                else:
+                    mask_indices = active_token_indices.unsqueeze(1).unsqueeze(2)
+                    attention_mask = torch.gather(attention_mask, 3, index=mask_indices)
             
             # 必须同步切片历史累积的 Token Score，否则层数增加会产生形状冲突！
             if cumulative_token_score is not None:
-                cumulative_token_score = torch.gather(cumulative_token_score, 1, active_token_indices)
-            
+                if cumulative_token_score.size(0) == 1:
+                    cumulative_token_score = cumulative_token_score.index_select(1, active_token_indices[0])
+                else:
+                    cumulative_token_score = torch.gather(cumulative_token_score, 1, active_token_indices)
         # ----------------------------------------------------
         # 状态同步
         # ----------------------------------------------------

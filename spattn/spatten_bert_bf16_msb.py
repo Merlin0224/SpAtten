@@ -13,7 +13,7 @@ from transformers.modeling_outputs import BaseModelOutputWithPastAndCrossAttenti
 import triton
 import triton.language as tl
 
-from module import slice_linear_weights, spatten_encoder_forward
+from module import slice_linear_weights, spatten_encoder_forward, slice_qkv_weights
 
 TRITON_META_DEFAULTS = {
     "progressive_qk": {
@@ -1028,13 +1028,20 @@ class SpattenBertSelfAttention(BertSelfAttention):
         cur_heads = active_head_indices.size(0)
 
         # 切片获取活跃的 Q, K, V 权重
-        wq, bq = slice_linear_weights(self.query, active_head_indices, self.num_heads, self.head_dim)
-        wk, bk = slice_linear_weights(self.key, active_head_indices, self.num_heads, self.head_dim)
-        wv, bv = slice_linear_weights(self.value, active_head_indices, self.num_heads, self.head_dim)
-                
-        query_layer = self.transpose_for_out(F.linear(hidden_states, wq, bq), cur_heads)
-        key_layer = self.transpose_for_out(F.linear(hidden_states, wk, bk), cur_heads)
-        value_layer = self.transpose_for_out(F.linear(hidden_states, wv, bv), cur_heads)
+        packed_w, packed_b = slice_qkv_weights(
+            self.query,
+            self.key,
+            self.value,
+            active_head_indices,
+            self.num_heads,
+            self.head_dim,
+        )
+        qkv = F.linear(hidden_states, packed_w, packed_b)
+        q_proj, k_proj, v_proj = torch.chunk(qkv, 3, dim=-1)
+
+        query_layer = self.transpose_for_out(q_proj, cur_heads)
+        key_layer = self.transpose_for_out(k_proj, cur_heads)
+        value_layer = self.transpose_for_out(v_proj, cur_heads)
         
         sm_scale = 1.0 / math.sqrt(self.head_dim)
         attention_probs = None
@@ -1116,11 +1123,17 @@ class SpattenBertSelfAttention(BertSelfAttention):
             and self.layer_idx >= self.head_prune_start_layer
             and ((self.layer_idx - self.head_prune_start_layer) % max(1, self.head_prune_interval) == 0)
         )
-        if self.enable_head_prune and cur_heads > self.head_prune_num:
-            keep_k = max(1, cur_heads - self.head_prune_num) # Ensure at least 1 head remains
-            _, topk_indices = torch.topk(head_importance, k=keep_k)
-            next_head_indices = active_head_indices[topk_indices]
-            next_head_indices = torch.sort(next_head_indices).values
+        if head_prune_active and cur_heads > self.head_prune_num:
+            if self.head_prune_num == 1:
+                drop_idx = torch.argmin(head_importance)
+                keep_mask = torch.ones(cur_heads, device=device, dtype=torch.bool)
+                keep_mask[drop_idx] = False
+                next_head_indices = active_head_indices[keep_mask]
+            else:
+                keep_k = max(1, cur_heads - self.head_prune_num) # Ensure at least 1 head remains
+                _, topk_indices = torch.topk(head_importance, k=keep_k)
+                next_head_indices = active_head_indices[topk_indices]
+                next_head_indices = torch.sort(next_head_indices).values
         
         self.next_active_head_indices = next_head_indices
 
@@ -1136,12 +1149,17 @@ class SpattenBertSelfAttention(BertSelfAttention):
             and self.layer_idx >= self.token_prune_start_layer
             and ((self.layer_idx - self.token_prune_start_layer) % max(1, self.token_prune_interval) == 0)
         )
-        if self.enable_token_prune and seq_len > self.token_prune_num:
+        if token_prune_active and seq_len > self.token_prune_num and self.token_prune_num == 1 and self.cumulative_token_score.size(0) == 1:
+            drop_idx = torch.argmin(self.cumulative_token_score[0])
+            keep_mask = torch.ones(seq_len, device=device, dtype=torch.bool)
+            keep_mask[drop_idx] = False
+            next_token_indices = torch.arange(seq_len, device=device).unsqueeze(0)[:, keep_mask]
+        elif token_prune_active and seq_len > self.token_prune_num:
             keep_k_tokens = max(1, seq_len - self.token_prune_num)
             _, topk_token_indices = torch.topk(self.cumulative_token_score, k=keep_k_tokens, dim=1)
             # 保持 Token 的原有句子的顺序
             next_token_indices = torch.sort(topk_token_indices, dim=1).values
-        
+            
         self.next_active_token_indices = next_token_indices # Store for next layer to use
 
         # ====================================================================
@@ -1215,7 +1233,9 @@ def main():
         attn.v_prune_num = 2         # 在软Softmax阶段，屏蔽 2 个最无关的 V 向量
         
         attn.enable_prog_quant = True # 开启 Triton 硬件级量化加速！
-        attn.quant_threshold = 0.05   # 设定动态提取高精度的容忍阈值
+        attn.quant_threshold = 0.01  # 论文忠实默认值：保留 k_lsb 参与机会，避免退化成近似 K_MSB-only
+        attn.v_threshold = 0.05
+        attn.token_prune_interval = 2
 
     with torch.no_grad():
         final_out = spatten_model(**inputs).last_hidden_state

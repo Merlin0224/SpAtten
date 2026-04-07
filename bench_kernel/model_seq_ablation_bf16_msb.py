@@ -5,8 +5,8 @@ from pathlib import Path
 
 import torch
 
-from route_b_model_ablation_paper_bf16_msb import recommend, run_variant
-from spatten_bert_ultimate_paper_bf16_msb import build_inputs_local_or_synthetic, load_bert_model_local_or_synthetic
+from bench_kernel.model_ablation_bf16_msb import recommend, run_variant
+from spattn.spatten_bert_bf16_msb import build_inputs_local_or_synthetic, load_bert_model_local_or_synthetic
 
 
 def parse_int_list(raw_value):
@@ -20,8 +20,12 @@ def main():
     parser.add_argument("--iters", type=int, default=30)
     parser.add_argument("--token-prune-num", type=int, default=1)
     parser.add_argument("--head-prune-num", type=int, default=1)
-    parser.add_argument("--quant-threshold", type=float, default=0.05)
+    parser.add_argument("--quant-threshold", type=float, default=0.01)
     parser.add_argument("--v-threshold", type=float, default=0.05)
+    parser.add_argument("--head-prune-start-layer", type=int, default=0)
+    parser.add_argument("--token-prune-start-layer", type=int, default=0)
+    parser.add_argument("--head-prune-interval", type=int, default=1)
+    parser.add_argument("--token-prune-interval", type=int, default=2)
     parser.add_argument("--enable-head-prune", action="store_true")
     parser.add_argument("--enable-token-prune", action="store_true")
     parser.add_argument("--output-dir", default="artifacts/route_b")
@@ -65,6 +69,10 @@ def main():
                 args.iters,
                 quant_threshold=args.quant_threshold,
                 v_threshold=args.v_threshold,
+                head_prune_start_layer=args.head_prune_start_layer,
+                token_prune_start_layer=args.token_prune_start_layer,
+                head_prune_interval=args.head_prune_interval,
+                token_prune_interval=args.token_prune_interval,
                 enable_head_prune=args.enable_head_prune,
                 enable_token_prune=args.enable_token_prune,
             )
@@ -113,6 +121,10 @@ def main():
         "head_prune_num": args.head_prune_num,
         "quant_threshold": args.quant_threshold,
         "v_threshold": args.v_threshold,
+        "head_prune_start_layer": args.head_prune_start_layer,
+        "token_prune_start_layer": args.token_prune_start_layer,
+        "head_prune_interval": args.head_prune_interval,
+        "token_prune_interval": args.token_prune_interval,
         "enable_head_prune": args.enable_head_prune,
         "enable_token_prune": args.enable_token_prune,
         "results": all_results,

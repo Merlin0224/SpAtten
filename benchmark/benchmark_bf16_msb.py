@@ -12,7 +12,7 @@ from transformers.models.bert.modeling_bert import BertEncoder
 
 # 配置日志保存
 logging.basicConfig(
-    filename='logs/benchmark_result_paper_bf16_msb.log',
+    filename='benchmark_result_paper_bf16_msb.log',
     filemode='w',
     format='%(asctime)s - %(message)s',
     level=logging.INFO
@@ -67,7 +67,7 @@ def main():
     print(f"Input source: {input_source}")
 
     spatten_model = copy.deepcopy(orig_model)
-    for layer in spatten_model.encoder.layer:
+    for layer_idx, layer in enumerate(spatten_model.encoder.layer):
         orig_state = layer.attention.self.state_dict()
         new_atten = SpattenBertSelfAttention(spatten_model.config)
         new_atten.load_state_dict(orig_state)
@@ -77,6 +77,10 @@ def main():
         new_atten.enable_token_prune = True
         new_atten.token_prune_num = 1
         new_atten.enable_prog_quant = True
+        new_atten.quant_threshold = 0.01
+        new_atten.v_threshold = 0.05
+        new_atten.token_prune_interval = 2
+        new_atten.layer_idx = layer_idx
         layer.attention.self = new_atten
 
     spatten_model.encoder.forward = spatten_encoder_forward.__get__(spatten_model.encoder, BertEncoder)
@@ -98,7 +102,7 @@ def main():
     
     print(msg)
     logging.info(msg)
-    print(f"Result saved to {logging.getLogger().handlers[0].baseFilename}")
+    print("Result saved to benchmark_result_paper_bf16_msb.log")
 
 if __name__ == "__main__":
     main()
