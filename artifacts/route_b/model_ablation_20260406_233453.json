@@ -1,0 +1,36 @@
+{
+  "timestamp": "20260406_233453",
+  "device": "NVIDIA GeForce RTX 3090",
+  "model_source": "synthetic BertConfig() weights",
+  "input_source": "local tokenizer cache: bert-base-uncased",
+  "seq_len": 4096,
+  "warmup": 10,
+  "iters": 50,
+  "token_prune_num": 1,
+  "head_prune_num": 1,
+  "enable_head_prune": false,
+  "enable_token_prune": false,
+  "results": {
+    "baseline": {
+      "ms": 5.646356,
+      "mode": "baseline",
+      "slowdown_vs_baseline": 1.0
+    },
+    "quant_only": {
+      "ms": 10.13803,
+      "mode": "quant_only",
+      "slowdown_vs_baseline": 1.7955
+    },
+    "v_prune_only": {
+      "ms": 9.733714,
+      "mode": "v_prune_only",
+      "slowdown_vs_baseline": 1.723893
+    },
+    "full": {
+      "ms": 9.984799,
+      "mode": "full",
+      "slowdown_vs_baseline": 1.768362
+    }
+  },
+  "recommendation": "V-prune-only is the fastest end-to-end SpAtten variant; next step should simplify the fused path so it inherits the standalone V-prune gains."
+}

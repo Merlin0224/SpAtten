@@ -7,7 +7,7 @@ import torch.nn.functional as F
 import math
 import copy
 from transformers.models.bert.modeling_bert import BertSelfAttention, BertModel, BertEncoder
-from transformers import BertTokenizer
+from transformers import BertConfig, BertTokenizer
 from transformers.modeling_outputs import BaseModelOutputWithPastAndCrossAttentions
 
 import triton
@@ -48,6 +48,48 @@ def _resolve_triton_meta(path_name, meta=None):
 
     config.update(meta)
     return config
+
+
+def load_bert_model_local_or_synthetic(device, model_name="bert-base-uncased", max_position_embeddings=None):
+    try:
+        if max_position_embeddings is not None and max_position_embeddings > 512:
+            raise ValueError("synthetic model requested for extended max_position_embeddings")
+        model = BertModel.from_pretrained(model_name, local_files_only=True)
+        source = f"local pretrained cache: {model_name}"
+    except Exception:
+        config_kwargs = {}
+        if max_position_embeddings is not None:
+            config_kwargs["max_position_embeddings"] = max_position_embeddings
+        model = BertModel(BertConfig(**config_kwargs))
+        source = f"synthetic BertConfig() weights (max_position_embeddings={model.config.max_position_embeddings})"
+    return model.to(device).half().eval(), source
+
+
+def build_inputs_local_or_synthetic(
+    device,
+    model,
+    model_name="bert-base-uncased",
+    seq_len=32,
+    exact_seq_len=False,
+):
+    text = "SpAtten is an algorithm-architecture co-design that leverages token, head, and quantization sparsity."
+    if exact_seq_len:
+        input_ids = torch.randint(0, model.config.vocab_size, (1, seq_len), device=device)
+        attention_mask = torch.ones((1, seq_len), device=device, dtype=torch.long)
+        inputs = {"input_ids": input_ids, "attention_mask": attention_mask}
+        source = f"synthetic exact-length token ids (seq_len={seq_len})"
+        return inputs, source
+
+    try:
+        tokenizer = BertTokenizer.from_pretrained(model_name, local_files_only=True)
+        inputs = tokenizer(text, return_tensors="pt").to(device)
+        source = f"local tokenizer cache: {model_name}"
+    except Exception:
+        input_ids = torch.randint(0, model.config.vocab_size, (1, seq_len), device=device)
+        attention_mask = torch.ones((1, seq_len), device=device, dtype=torch.long)
+        inputs = {"input_ids": input_ids, "attention_mask": attention_mask}
+        source = f"synthetic token ids (seq_len={seq_len})"
+    return inputs, source
 
 # =====================================================================
 # Triton 渐进式量化 Kernel (Progressive Quantization) 和 FlashAttention
@@ -132,6 +174,85 @@ def _progressive_qk_kernel(
     acc = acc / l_i[:, None]
     out_ptrs = out_base + offs_m[:, None] * stride_om + offs_d[None, :] * stride_ok
     tl.store(out_ptrs, acc.to(Out.type.element_ty), mask=offs_m[:, None] < N_CTX_Q)
+
+
+@triton.jit
+def _progressive_qk_stats_kernel(
+    Q, K_MSB, K_LSB, V, Out, Out_Sum,
+    stride_qz, stride_qh, stride_qm, stride_qk,
+    stride_kz, stride_kh, stride_kn, stride_kk,
+    stride_vz, stride_vh, stride_vn, stride_vk,
+    stride_oz, stride_oh, stride_om, stride_ok,
+    Z, H, N_CTX_Q, N_CTX_K,
+    sm_scale, threshold,
+    BLOCK_M: tl.constexpr,
+    BLOCK_N: tl.constexpr,
+    d_model: tl.constexpr
+):
+    start_m = tl.program_id(0)
+    off_hz = tl.program_id(1)
+
+    off_b = off_hz // H
+    off_h = off_hz % H
+
+    q_base = Q + off_b * stride_qz + off_h * stride_qh
+    k_msb_base = K_MSB + off_b * stride_kz + off_h * stride_kh
+    k_lsb_base = K_LSB + off_b * stride_kz + off_h * stride_kh
+    v_base = V + off_b * stride_vz + off_h * stride_vh
+    out_base = Out + off_b * stride_oz + off_h * stride_oh
+
+    offs_m = start_m * BLOCK_M + tl.arange(0, BLOCK_M)
+    offs_n = tl.arange(0, BLOCK_N)
+    offs_d = tl.arange(0, d_model)
+
+    q_ptrs = q_base + offs_m[:, None] * stride_qm + offs_d[None, :] * stride_qk
+    qi = tl.load(q_ptrs, mask=offs_m[:, None] < N_CTX_Q, other=0.0)
+
+    m_i = tl.zeros([BLOCK_M], dtype=tl.float32) - float('inf')
+    l_i = tl.zeros([BLOCK_M], dtype=tl.float32)
+    acc = tl.zeros([BLOCK_M, d_model], dtype=tl.float32)
+    row_sum = tl.zeros([BLOCK_M], dtype=tl.float32)
+
+    for j in range(0, tl.cdiv(N_CTX_K, BLOCK_N)):
+        cur_n = j * BLOCK_N
+        offs_n_curr = cur_n + offs_n
+
+        k_msb_ptrs = k_msb_base + offs_n_curr[:, None] * stride_kn + offs_d[None, :] * stride_kk
+        k_msb = tl.load(k_msb_ptrs, mask=offs_n_curr[:, None] < N_CTX_K, other=0.0)
+
+        qk = tl.dot(qi, tl.trans(k_msb)) * sm_scale
+
+        max_score = tl.max(qk)
+        if max_score < threshold:
+            k_lsb_ptrs = k_lsb_base + offs_n_curr[:, None] * stride_kn + offs_d[None, :] * stride_kk
+            k_lsb = tl.load(k_lsb_ptrs, mask=offs_n_curr[:, None] < N_CTX_K, other=0.0)
+            qk += tl.dot(qi, tl.trans(k_lsb)) * sm_scale
+
+        m_ij = tl.max(qk, 1)
+        p = tl.exp(qk - m_ij[:, None])
+        l_ij = tl.sum(p, 1)
+
+        m_next = tl.maximum(m_i, m_ij)
+        alpha = tl.exp(m_i - m_next)
+        beta = tl.exp(m_ij - m_next)
+
+        row_sum += l_ij * beta
+        l_i = l_i * alpha + l_ij * beta
+        acc = acc * alpha[:, None]
+
+        v_ptrs = v_base + offs_n_curr[:, None] * stride_vn + offs_d[None, :] * stride_vk
+        v = tl.load(v_ptrs, mask=offs_n_curr[:, None] < N_CTX_K, other=0.0)
+
+        p_scaled = p * beta[:, None]
+        acc = tl.dot(p_scaled.to(tl.float16), v.to(tl.float16), acc)
+
+        m_i = m_next
+
+    acc = acc / l_i[:, None]
+    out_ptrs = out_base + offs_m[:, None] * stride_om + offs_d[None, :] * stride_ok
+    sum_ptrs = Out_Sum + off_b * H * N_CTX_Q + off_h * N_CTX_Q + offs_m
+    tl.store(out_ptrs, acc.to(Out.type.element_ty), mask=offs_m[:, None] < N_CTX_Q)
+    tl.store(sum_ptrs, row_sum, mask=offs_m < N_CTX_Q)
 
 
 @triton.jit
@@ -331,6 +452,7 @@ def _spatten_fused_ultimate_kernel(
     out_ptrs = out_base + offs_m[:, None] * stride_om + offs_d[None, :] * stride_ok
     sum_ptrs = Out_Sum + off_b * H * N_CTX_Q + off_h * N_CTX_Q + offs_m
     tl.store(out_ptrs, acc.to(Out.type.element_ty), mask=offs_m[:, None] < N_CTX_Q)
+    tl.store(sum_ptrs, row_sum, mask=offs_m < N_CTX_Q)
 
 
 @triton.jit
@@ -418,8 +540,238 @@ def _spatten_fused_ultimate_nostats_kernel(
     tl.store(out_ptrs, acc.to(Out.type.element_ty), mask=offs_m[:, None] < N_CTX_Q)
 
 
+@triton.jit
+def _spatten_v_prune_block_skip_kernel(
+    Q, K, V, Out,
+    stride_qz, stride_qh, stride_qm, stride_qk,
+    stride_kz, stride_kh, stride_kn, stride_kk,
+    stride_vz, stride_vh, stride_vn, stride_vk,
+    stride_oz, stride_oh, stride_om, stride_ok,
+    Z, H, N_CTX_Q, N_CTX_K,
+    sm_scale, v_threshold,
+    BLOCK_M: tl.constexpr,
+    BLOCK_N: tl.constexpr,
+    BLOCK_D: tl.constexpr,
+):
+    start_m = tl.program_id(0)
+    off_hz = tl.program_id(1)
 
-def triton_progressive_qk(q, k_msb, k_lsb, v, threshold, sm_scale, meta=None):
+    off_b = off_hz // H
+    off_h = off_hz % H
+
+    q_base = Q + off_b * stride_qz + off_h * stride_qh
+    k_base = K + off_b * stride_kz + off_h * stride_kh
+    v_base = V + off_b * stride_vz + off_h * stride_vh
+    out_base = Out + off_b * stride_oz + off_h * stride_oh
+
+    offs_m = start_m * BLOCK_M + tl.arange(0, BLOCK_M)
+    offs_n = tl.arange(0, BLOCK_N)
+    offs_d = tl.arange(0, BLOCK_D)
+
+    q_ptrs = q_base + offs_m[:, None] * stride_qm + offs_d[None, :] * stride_qk
+    qi = tl.load(q_ptrs, mask=offs_m[:, None] < N_CTX_Q, other=0.0)
+
+    m_i = tl.zeros([BLOCK_M], dtype=tl.float32) - float('inf')
+    l_i = tl.zeros([BLOCK_M], dtype=tl.float32)
+    acc = tl.zeros([BLOCK_M, BLOCK_D], dtype=tl.float32)
+
+    for j in range(0, tl.cdiv(N_CTX_K, BLOCK_N)):
+        cur_n = j * BLOCK_N
+        offs_n_curr = cur_n + offs_n
+
+        k_ptrs = k_base + offs_n_curr[:, None] * stride_kn + offs_d[None, :] * stride_kk
+        k = tl.load(k_ptrs, mask=offs_n_curr[:, None] < N_CTX_K, other=0.0)
+
+        qk = tl.dot(qi, tl.trans(k)) * sm_scale
+
+        m_ij = tl.max(qk, 1)
+        m_next = tl.maximum(m_i, m_ij)
+        alpha = tl.exp(m_i - m_next)
+        beta = tl.exp(m_ij - m_next)
+
+        p = tl.exp(qk - m_next[:, None])
+        max_p_for_v = tl.max(p, axis=0)
+
+        l_ij = tl.sum(p, 1)
+        l_i_new = l_i * alpha + l_ij * beta
+        acc_new = acc * alpha[:, None]
+
+        skip_v = tl.max(max_p_for_v) <= v_threshold
+        if skip_v:
+            acc = acc_new
+        else:
+            v_ptrs = v_base + offs_n_curr[:, None] * stride_vn + offs_d[None, :] * stride_vk
+            v = tl.load(v_ptrs, mask=offs_n_curr[:, None] < N_CTX_K, other=0.0)
+            p_scaled = p * beta[:, None]
+            acc = tl.dot(p_scaled.to(tl.float16), v.to(tl.float16), acc_new)
+
+        l_i = l_i_new
+        m_i = m_next
+
+    acc = acc / l_i[:, None]
+    out_ptrs = out_base + offs_m[:, None] * stride_om + offs_d[None, :] * stride_ok
+    tl.store(out_ptrs, acc.to(Out.type.element_ty), mask=offs_m[:, None] < N_CTX_Q)
+
+
+@triton.jit
+def _spatten_v_prune_block_skip_stats_kernel(
+    Q, K, V, Out, Out_Sum,
+    stride_qz, stride_qh, stride_qm, stride_qk,
+    stride_kz, stride_kh, stride_kn, stride_kk,
+    stride_vz, stride_vh, stride_vn, stride_vk,
+    stride_oz, stride_oh, stride_om, stride_ok,
+    Z, H, N_CTX_Q, N_CTX_K,
+    sm_scale, v_threshold,
+    BLOCK_M: tl.constexpr,
+    BLOCK_N: tl.constexpr,
+    BLOCK_D: tl.constexpr,
+):
+    start_m = tl.program_id(0)
+    off_hz = tl.program_id(1)
+
+    off_b = off_hz // H
+    off_h = off_hz % H
+
+    q_base = Q + off_b * stride_qz + off_h * stride_qh
+    k_base = K + off_b * stride_kz + off_h * stride_kh
+    v_base = V + off_b * stride_vz + off_h * stride_vh
+    out_base = Out + off_b * stride_oz + off_h * stride_oh
+
+    offs_m = start_m * BLOCK_M + tl.arange(0, BLOCK_M)
+    offs_n = tl.arange(0, BLOCK_N)
+    offs_d = tl.arange(0, BLOCK_D)
+
+    q_ptrs = q_base + offs_m[:, None] * stride_qm + offs_d[None, :] * stride_qk
+    qi = tl.load(q_ptrs, mask=offs_m[:, None] < N_CTX_Q, other=0.0)
+
+    m_i = tl.zeros([BLOCK_M], dtype=tl.float32) - float('inf')
+    l_i = tl.zeros([BLOCK_M], dtype=tl.float32)
+    acc = tl.zeros([BLOCK_M, BLOCK_D], dtype=tl.float32)
+    row_sum = tl.zeros([BLOCK_M], dtype=tl.float32)
+
+    for j in range(0, tl.cdiv(N_CTX_K, BLOCK_N)):
+        cur_n = j * BLOCK_N
+        offs_n_curr = cur_n + offs_n
+
+        k_ptrs = k_base + offs_n_curr[:, None] * stride_kn + offs_d[None, :] * stride_kk
+        k = tl.load(k_ptrs, mask=offs_n_curr[:, None] < N_CTX_K, other=0.0)
+
+        qk = tl.dot(qi, tl.trans(k)) * sm_scale
+
+        m_ij = tl.max(qk, 1)
+        m_next = tl.maximum(m_i, m_ij)
+        alpha = tl.exp(m_i - m_next)
+        beta = tl.exp(m_ij - m_next)
+
+        p = tl.exp(qk - m_next[:, None])
+        max_p_for_v = tl.max(p, axis=0)
+
+        l_ij = tl.sum(p, 1)
+        row_sum += l_ij
+        l_i_new = l_i * alpha + l_ij * beta
+        acc_new = acc * alpha[:, None]
+
+        skip_v = tl.max(max_p_for_v) <= v_threshold
+        if skip_v:
+            acc = acc_new
+        else:
+            v_ptrs = v_base + offs_n_curr[:, None] * stride_vn + offs_d[None, :] * stride_vk
+            v = tl.load(v_ptrs, mask=offs_n_curr[:, None] < N_CTX_K, other=0.0)
+            p_scaled = p * beta[:, None]
+            acc = tl.dot(p_scaled.to(tl.float16), v.to(tl.float16), acc_new)
+
+        l_i = l_i_new
+        m_i = m_next
+
+    acc = acc / l_i[:, None]
+    out_ptrs = out_base + offs_m[:, None] * stride_om + offs_d[None, :] * stride_ok
+    sum_ptrs = Out_Sum + off_b * H * N_CTX_Q + off_h * N_CTX_Q + offs_m
+    tl.store(out_ptrs, acc.to(Out.type.element_ty), mask=offs_m[:, None] < N_CTX_Q)
+    tl.store(sum_ptrs, row_sum, mask=offs_m < N_CTX_Q)
+
+
+@triton.jit
+def _spatten_fused_ultimate_block_skip_nostats_kernel(
+    Q, K_MSB, K_LSB, V, Out,
+    stride_qz, stride_qh, stride_qm, stride_qk,
+    stride_kz, stride_kh, stride_kn, stride_kk,
+    stride_vz, stride_vh, stride_vn, stride_vk,
+    stride_oz, stride_oh, stride_om, stride_ok,
+    Z, H, N_CTX_Q, N_CTX_K,
+    sm_scale, quant_threshold, v_threshold,
+    BLOCK_M: tl.constexpr,
+    BLOCK_N: tl.constexpr,
+    d_model: tl.constexpr
+):
+    start_m = tl.program_id(0)
+    off_hz = tl.program_id(1)
+
+    off_b = off_hz // H
+    off_h = off_hz % H
+
+    q_base = Q + off_b * stride_qz + off_h * stride_qh
+    k_msb_base = K_MSB + off_b * stride_kz + off_h * stride_kh
+    k_lsb_base = K_LSB + off_b * stride_kz + off_h * stride_kh
+    v_base = V + off_b * stride_vz + off_h * stride_vh
+    out_base = Out + off_b * stride_oz + off_h * stride_oh
+
+    offs_m = start_m * BLOCK_M + tl.arange(0, BLOCK_M)
+    offs_n = tl.arange(0, BLOCK_N)
+    offs_d = tl.arange(0, d_model)
+
+    q_ptrs = q_base + offs_m[:, None] * stride_qm + offs_d[None, :] * stride_qk
+    qi = tl.load(q_ptrs, mask=offs_m[:, None] < N_CTX_Q, other=0.0)
+
+    m_i = tl.zeros([BLOCK_M], dtype=tl.float32) - float('inf')
+    l_i = tl.zeros([BLOCK_M], dtype=tl.float32)
+    acc = tl.zeros([BLOCK_M, d_model], dtype=tl.float32)
+
+    for j in range(0, tl.cdiv(N_CTX_K, BLOCK_N)):
+        cur_n = j * BLOCK_N
+        offs_n_curr = cur_n + offs_n
+
+        k_msb_ptrs = k_msb_base + offs_n_curr[:, None] * stride_kn + offs_d[None, :] * stride_kk
+        k_msb = tl.load(k_msb_ptrs, mask=offs_n_curr[:, None] < N_CTX_K, other=0.0)
+
+        qk = tl.dot(qi, tl.trans(k_msb)) * sm_scale
+
+        max_score = tl.max(qk)
+        if max_score < quant_threshold:
+            k_lsb_ptrs = k_lsb_base + offs_n_curr[:, None] * stride_kn + offs_d[None, :] * stride_kk
+            k_lsb = tl.load(k_lsb_ptrs, mask=offs_n_curr[:, None] < N_CTX_K, other=0.0)
+            qk += tl.dot(qi, tl.trans(k_lsb)) * sm_scale
+
+        m_ij = tl.max(qk, 1)
+        p = tl.exp(qk - m_ij[:, None])
+
+        m_next = tl.maximum(m_i, m_ij)
+        alpha = tl.exp(m_i - m_next)
+        beta = tl.exp(m_ij - m_next)
+
+        max_p_for_v = tl.max(p, axis=0)
+        l_ij = tl.sum(p, 1)
+        l_i_new = l_i * alpha + l_ij * beta
+        acc_new = acc * alpha[:, None]
+
+        skip_v = tl.max(max_p_for_v) <= v_threshold
+        if skip_v:
+            acc = acc_new
+        else:
+            v_ptrs = v_base + offs_n_curr[:, None] * stride_vn + offs_d[None, :] * stride_vk
+            v = tl.load(v_ptrs, mask=offs_n_curr[:, None] < N_CTX_K, other=0.0)
+            p_scaled = p * beta[:, None]
+            acc = tl.dot(p_scaled.to(tl.float16), v.to(tl.float16), acc_new)
+
+        l_i = l_i_new
+        m_i = m_next
+
+    acc = acc / l_i[:, None]
+    out_ptrs = out_base + offs_m[:, None] * stride_om + offs_d[None, :] * stride_ok
+    tl.store(out_ptrs, acc.to(Out.type.element_ty), mask=offs_m[:, None] < N_CTX_Q)
+
+
+
+def triton_progressive_qk(q, k_msb, k_lsb, v, threshold, sm_scale, meta=None, out_sum=None, collect_stats=False):
     Z, H, M, D = q.shape
     _, _, N, _ = k_msb.shape
     out = torch.empty_like(q)
@@ -429,17 +781,32 @@ def triton_progressive_qk(q, k_msb, k_lsb, v, threshold, sm_scale, meta=None):
     BLOCK_N = config["BLOCK_N"]
     grid = (triton.cdiv(M, BLOCK_M), Z * H)
 
-    _progressive_qk_kernel[grid](
-        q, k_msb, k_lsb, v, out,
-        q.stride(0), q.stride(1), q.stride(2), q.stride(3),
-        k_msb.stride(0), k_msb.stride(1), k_msb.stride(2), k_msb.stride(3),
-        v.stride(0), v.stride(1), v.stride(2), v.stride(3),
-        out.stride(0), out.stride(1), out.stride(2), out.stride(3),
-        Z, H, M, N,
-        sm_scale, threshold,
-        BLOCK_M=BLOCK_M, BLOCK_N=BLOCK_N, d_model=D,
-        num_warps=config["num_warps"], num_stages=config["num_stages"]
-    )
+    if collect_stats:
+        if out_sum is None:
+            raise ValueError("out_sum must be provided when collect_stats=True for triton_progressive_qk")
+        _progressive_qk_stats_kernel[grid](
+            q, k_msb, k_lsb, v, out, out_sum,
+            q.stride(0), q.stride(1), q.stride(2), q.stride(3),
+            k_msb.stride(0), k_msb.stride(1), k_msb.stride(2), k_msb.stride(3),
+            v.stride(0), v.stride(1), v.stride(2), v.stride(3),
+            out.stride(0), out.stride(1), out.stride(2), out.stride(3),
+            Z, H, M, N,
+            sm_scale, threshold,
+            BLOCK_M=BLOCK_M, BLOCK_N=BLOCK_N, d_model=D,
+            num_warps=config["num_warps"], num_stages=config["num_stages"]
+        )
+    else:
+        _progressive_qk_kernel[grid](
+            q, k_msb, k_lsb, v, out,
+            q.stride(0), q.stride(1), q.stride(2), q.stride(3),
+            k_msb.stride(0), k_msb.stride(1), k_msb.stride(2), k_msb.stride(3),
+            v.stride(0), v.stride(1), v.stride(2), v.stride(3),
+            out.stride(0), out.stride(1), out.stride(2), out.stride(3),
+            Z, H, M, N,
+            sm_scale, threshold,
+            BLOCK_M=BLOCK_M, BLOCK_N=BLOCK_N, d_model=D,
+            num_warps=config["num_warps"], num_stages=config["num_stages"]
+        )
     return out
 
 
@@ -464,6 +831,44 @@ def triton_fused_spatten_v_prune(q, k, v, v_threshold, sm_scale, meta=None):
         BLOCK_M=BLOCK_M, BLOCK_N=BLOCK_N, BLOCK_D=D,
         num_warps=config["num_warps"], num_stages=config["num_stages"]
     )
+    return out
+
+def triton_fused_spatten_v_prune_block_skip(q, k, v, v_threshold, sm_scale, meta=None, out_sum=None, collect_stats=False):
+    Z, H, M, D = q.shape
+    _, _, N, _ = k.shape
+    out = torch.empty_like(q)
+
+    config = _resolve_triton_meta("v_prune", meta)
+    BLOCK_M = config["BLOCK_M"]
+    BLOCK_N = config["BLOCK_N"]
+    grid = (triton.cdiv(M, BLOCK_M), Z * H)
+
+    if collect_stats:
+        if out_sum is None:
+            raise ValueError("out_sum must be provided when collect_stats=True for triton_fused_spatten_v_prune_block_skip")
+        _spatten_v_prune_block_skip_stats_kernel[grid](
+            q, k, v, out, out_sum,
+            q.stride(0), q.stride(1), q.stride(2), q.stride(3),
+            k.stride(0), k.stride(1), k.stride(2), k.stride(3),
+            v.stride(0), v.stride(1), v.stride(2), v.stride(3),
+            out.stride(0), out.stride(1), out.stride(2), out.stride(3),
+            Z, H, M, N,
+            sm_scale, v_threshold,
+            BLOCK_M=BLOCK_M, BLOCK_N=BLOCK_N, BLOCK_D=D,
+            num_warps=config["num_warps"], num_stages=config["num_stages"]
+        )
+    else:
+        _spatten_v_prune_block_skip_kernel[grid](
+            q, k, v, out,
+            q.stride(0), q.stride(1), q.stride(2), q.stride(3),
+            k.stride(0), k.stride(1), k.stride(2), k.stride(3),
+            v.stride(0), v.stride(1), v.stride(2), v.stride(3),
+            out.stride(0), out.stride(1), out.stride(2), out.stride(3),
+            Z, H, M, N,
+            sm_scale, v_threshold,
+            BLOCK_M=BLOCK_M, BLOCK_N=BLOCK_N, BLOCK_D=D,
+            num_warps=config["num_warps"], num_stages=config["num_stages"]
+        )
     return out
 
 def triton_fused_spatten_ultimate(
@@ -511,6 +916,44 @@ def triton_fused_spatten_ultimate(
             BLOCK_M=BLOCK_M, BLOCK_N=BLOCK_N, d_model=D,
             num_warps=config["num_warps"], num_stages=config["num_stages"]
         )
+    return out
+
+
+def triton_fused_spatten_ultimate_block_skip(
+    q,
+    k_msb,
+    k_lsb,
+    v,
+    out_sum,
+    quant_threshold,
+    v_threshold,
+    sm_scale,
+    meta=None,
+    collect_stats=False,
+):
+    if collect_stats:
+        raise NotImplementedError("block-skip fused kernel is currently benchmark-only (collect_stats=False).")
+
+    Z, H, M, D = q.shape
+    _, _, N, _ = k_msb.shape
+    out = torch.empty_like(q)
+
+    config = _resolve_triton_meta("ultimate", meta)
+    BLOCK_M = config["BLOCK_M"]
+    BLOCK_N = config["BLOCK_N"]
+    grid = (triton.cdiv(M, BLOCK_M), Z * H)
+
+    _spatten_fused_ultimate_block_skip_nostats_kernel[grid](
+        q, k_msb, k_lsb, v, out,
+        q.stride(0), q.stride(1), q.stride(2), q.stride(3),
+        k_msb.stride(0), k_msb.stride(1), k_msb.stride(2), k_msb.stride(3),
+        v.stride(0), v.stride(1), v.stride(2), v.stride(3),
+        out.stride(0), out.stride(1), out.stride(2), out.stride(3),
+        Z, H, M, N,
+        sm_scale, quant_threshold, v_threshold,
+        BLOCK_M=BLOCK_M, BLOCK_N=BLOCK_N, d_model=D,
+        num_warps=config["num_warps"], num_stages=config["num_stages"]
+    )
     return out
 
 # ========================================================
@@ -605,24 +1048,28 @@ class SpattenBertSelfAttention(BertSelfAttention):
             # 【仅开启渐进式量化】
             k_msb = key_layer * 0.8
             k_lsb = key_layer * 0.2
+            out_sum = torch.zeros((bs, cur_heads, seq_len), device=device, dtype=torch.float32)
             context_layer = triton_progressive_qk(
                 query_layer, k_msb, k_lsb, value_layer,
-                self.quant_threshold, sm_scale
+                self.quant_threshold, sm_scale,
+                out_sum=out_sum,
+                collect_stats=True,
             )
-            q_mean = query_layer.mean(dim=2, keepdim=True)
-            proxy_scores = torch.matmul(q_mean, key_layer.transpose(-1, -2) * sm_scale)
-            attention_probs = torch.softmax(proxy_scores, dim=-1)
+            current_token_importance = out_sum.sum(dim=1)
+            op = False
 
         elif self.enable_v_prune and self.v_prune_num > 0:
             # 【仅开启局部 V 剪枝】
             dynamic_v_threshold = 0.05 
-            context_layer = triton_fused_spatten_v_prune(
+            out_sum = torch.zeros((bs, cur_heads, seq_len), device=device, dtype=torch.float32)
+            context_layer = triton_fused_spatten_v_prune_block_skip(
                 query_layer, key_layer, value_layer,
-                v_threshold=dynamic_v_threshold, sm_scale=sm_scale
+                v_threshold=dynamic_v_threshold, sm_scale=sm_scale,
+                out_sum=out_sum,
+                collect_stats=True,
             )
-            q_mean = query_layer.mean(dim=2, keepdim=True)
-            proxy_scores = torch.matmul(q_mean, key_layer.transpose(-1, -2) * sm_scale)
-            attention_probs = torch.softmax(proxy_scores, dim=-1)
+            current_token_importance = out_sum.sum(dim=1)
+            op = False
 
         else:
             # 【原生 PyTorch 路径】没有任何硬件级优化
@@ -707,27 +1154,27 @@ class SpattenBertSelfAttention(BertSelfAttention):
         # ====================================================================
         # 统一形状处理与输出返回
         # ====================================================================
-        # 移走 H 维度:[B, H, S, D_out] -> [B, S, H, D_out]
+        if context_layer.dim() != 4:
+            raise RuntimeError(f"Unexpected context_layer shape: {list(context_layer.shape)}")
+
+        # [B, H_active, S, D] -> [B, S, H_active, D]
         context_layer = context_layer.permute(0, 2, 1, 3).contiguous()
-        
-        # 展平: [B, S, H * D_out]
         bs = context_layer.shape[0]
         seq_len_actual = context_layer.shape[1]
-        context_layer = context_layer.reshape(bs, seq_len_actual, -1)
-        
-        if context_layer.dim() == 4:
-            context_layer = context_layer.permute(0, 2, 1, 3).contiguous()
-            full_context = torch.zeros(
-                context_layer.shape[0], context_layer.shape[1],
-                self.num_heads, self.head_dim, device=device, dtype=hidden_states.dtype)
-            full_context = full_context.view(context_layer.shape[0], context_layer.shape[1], -1)
-        else:
-            context_layer = context_layer.permute(1, 0, 2).contiguous()
-            full_context = torch.zeros(context_layer.shape[0], self.num_heads,
-                self.head_dim, device=device, dtype=hidden_states.dtype)
-            full_context = full_context.view(context_layer.shape[0], -1)
-            
-        return (full_context, None)
+
+        # Scatter active heads back into the original BERT hidden layout.
+        full_context = torch.zeros(
+            bs,
+            seq_len_actual,
+            self.num_heads,
+            self.head_dim,
+            device=device,
+            dtype=hidden_states.dtype,
+        )
+        full_context[:, :, active_head_indices, :] = context_layer
+        full_context = full_context.view(bs, seq_len_actual, -1)
+
+        return (full_context, attention_probs)
 
 # ====================================================================
 # 测试
@@ -736,9 +1183,8 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f" SpAtten Ultimate Integration Running on: {device} \n")
 
-    tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
+    original_model, model_source = load_bert_model_local_or_synthetic(device)
     # 为了让 Triton Kernel 发挥最佳性能，将模型转换为 FP16 精度
-    original_model = BertModel.from_pretrained("bert-base-uncased").to(device).half().eval()
     spatten_model = copy.deepcopy(original_model)
 
     for i, layer in enumerate(spatten_model.encoder.layer):
@@ -750,7 +1196,9 @@ def main():
     spatten_model.encoder.forward = spatten_encoder_forward.__get__(spatten_model.encoder, BertEncoder)
     spatten_model.to(device).half().eval()
 
-    inputs = tokenizer("SpAtten is an algorithm-architecture co-design that leverages token, head, and quantization sparsity.", return_tensors="pt").to(device)
+    inputs, input_source = build_inputs_local_or_synthetic(device, original_model)
+    print(f"Model source: {model_source}")
+    print(f"Input source: {input_source}")
     print(f"Original Sequence Length: {inputs['input_ids'].shape[1]}")
 
     print("\n[Step 1] Baseline Validation (All Pruning OFF)...")

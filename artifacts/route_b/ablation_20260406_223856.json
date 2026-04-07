@@ -1,0 +1,72 @@
+{
+  "timestamp": "20260406_223856",
+  "device": "NVIDIA GeForce RTX 3090",
+  "shape": {
+    "batch": 1,
+    "heads": 12,
+    "seq_q": 4096,
+    "seq_k": 4096,
+    "head_dim": 64
+  },
+  "dtype": "float16",
+  "quant_threshold": 0.05,
+  "v_threshold": 0.01,
+  "results": {
+    "attention_only": {
+      "ms": 0.848146,
+      "meta": null,
+      "slowdown_vs_attention_only": 1.0
+    },
+    "quant_only": {
+      "ms": 2.028788,
+      "meta": {
+        "BLOCK_M": 32,
+        "BLOCK_N": 32,
+        "num_warps": 4,
+        "num_stages": 1
+      },
+      "slowdown_vs_attention_only": 2.392027
+    },
+    "v_prune_only": {
+      "ms": 1.523531,
+      "meta": {
+        "BLOCK_M": 32,
+        "BLOCK_N": 32,
+        "num_warps": 4,
+        "num_stages": 2
+      },
+      "slowdown_vs_attention_only": 1.796307
+    },
+    "v_prune_block_only": {
+      "ms": 1.422489,
+      "meta": {
+        "BLOCK_M": 32,
+        "BLOCK_N": 32,
+        "num_warps": 4,
+        "num_stages": 2
+      },
+      "slowdown_vs_attention_only": 1.677175
+    },
+    "full": {
+      "ms": 1.095809,
+      "meta": {
+        "BLOCK_M": 128,
+        "BLOCK_N": 64,
+        "num_warps": 4,
+        "num_stages": 1
+      },
+      "slowdown_vs_attention_only": 1.292005
+    },
+    "full_block_only": {
+      "ms": 1.109135,
+      "meta": {
+        "BLOCK_M": 128,
+        "BLOCK_N": 64,
+        "num_warps": 4,
+        "num_stages": 1
+      },
+      "slowdown_vs_attention_only": 1.307717
+    }
+  },
+  "recommendation": "Block-skip-only V pruning beats the fine-grained V-prune kernel. This points directly to masked V loads and per-element pruning as the current drag."
+}

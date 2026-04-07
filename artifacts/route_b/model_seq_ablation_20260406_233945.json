@@ -1,0 +1,189 @@
+{
+  "timestamp": "20260406_233945",
+  "device": "NVIDIA GeForce RTX 3090",
+  "model_source": "synthetic BertConfig() weights",
+  "seq_lens": [
+    128,
+    256,
+    512,
+    1024,
+    2048,
+    4096
+  ],
+  "warmup": 10,
+  "iters": 30,
+  "token_prune_num": 1,
+  "head_prune_num": 1,
+  "enable_head_prune": false,
+  "enable_token_prune": false,
+  "results": [
+    {
+      "seq_len": 128,
+      "input_source": "local tokenizer cache: bert-base-uncased",
+      "results": {
+        "baseline": {
+          "ms": 5.580937,
+          "mode": "baseline",
+          "slowdown_vs_baseline": 1.0
+        },
+        "quant_only": {
+          "ms": 10.155247,
+          "mode": "quant_only",
+          "slowdown_vs_baseline": 1.819631
+        },
+        "v_prune_only": {
+          "ms": 9.363149,
+          "mode": "v_prune_only",
+          "slowdown_vs_baseline": 1.677702
+        },
+        "full": {
+          "ms": 9.962086,
+          "mode": "full",
+          "slowdown_vs_baseline": 1.78502
+        }
+      },
+      "best_variant": "v_prune_only",
+      "recommendation": "V-prune-only is the fastest end-to-end SpAtten variant; next step should simplify the fused path so it inherits the standalone V-prune gains."
+    },
+    {
+      "seq_len": 256,
+      "input_source": "local tokenizer cache: bert-base-uncased",
+      "results": {
+        "baseline": {
+          "ms": 5.539567,
+          "mode": "baseline",
+          "slowdown_vs_baseline": 1.0
+        },
+        "quant_only": {
+          "ms": 9.822139,
+          "mode": "quant_only",
+          "slowdown_vs_baseline": 1.773088
+        },
+        "v_prune_only": {
+          "ms": 9.867913,
+          "mode": "v_prune_only",
+          "slowdown_vs_baseline": 1.781351
+        },
+        "full": {
+          "ms": 9.926622,
+          "mode": "full",
+          "slowdown_vs_baseline": 1.791949
+        }
+      },
+      "best_variant": "quant_only",
+      "recommendation": "Quant-only is the fastest end-to-end SpAtten variant; next step should keep focusing on progressive quantization and avoid adding extra pruning overhead."
+    },
+    {
+      "seq_len": 512,
+      "input_source": "local tokenizer cache: bert-base-uncased",
+      "results": {
+        "baseline": {
+          "ms": 5.654119,
+          "mode": "baseline",
+          "slowdown_vs_baseline": 1.0
+        },
+        "quant_only": {
+          "ms": 9.685231,
+          "mode": "quant_only",
+          "slowdown_vs_baseline": 1.712951
+        },
+        "v_prune_only": {
+          "ms": 9.24795,
+          "mode": "v_prune_only",
+          "slowdown_vs_baseline": 1.635613
+        },
+        "full": {
+          "ms": 9.87136,
+          "mode": "full",
+          "slowdown_vs_baseline": 1.745871
+        }
+      },
+      "best_variant": "v_prune_only",
+      "recommendation": "V-prune-only is the fastest end-to-end SpAtten variant; next step should simplify the fused path so it inherits the standalone V-prune gains."
+    },
+    {
+      "seq_len": 1024,
+      "input_source": "local tokenizer cache: bert-base-uncased",
+      "results": {
+        "baseline": {
+          "ms": 5.514957,
+          "mode": "baseline",
+          "slowdown_vs_baseline": 1.0
+        },
+        "quant_only": {
+          "ms": 9.89167,
+          "mode": "quant_only",
+          "slowdown_vs_baseline": 1.793608
+        },
+        "v_prune_only": {
+          "ms": 9.584231,
+          "mode": "v_prune_only",
+          "slowdown_vs_baseline": 1.737861
+        },
+        "full": {
+          "ms": 9.913924,
+          "mode": "full",
+          "slowdown_vs_baseline": 1.797643
+        }
+      },
+      "best_variant": "v_prune_only",
+      "recommendation": "V-prune-only is the fastest end-to-end SpAtten variant; next step should simplify the fused path so it inherits the standalone V-prune gains."
+    },
+    {
+      "seq_len": 2048,
+      "input_source": "local tokenizer cache: bert-base-uncased",
+      "results": {
+        "baseline": {
+          "ms": 5.641183,
+          "mode": "baseline",
+          "slowdown_vs_baseline": 1.0
+        },
+        "quant_only": {
+          "ms": 9.823028,
+          "mode": "quant_only",
+          "slowdown_vs_baseline": 1.741306
+        },
+        "v_prune_only": {
+          "ms": 9.550131,
+          "mode": "v_prune_only",
+          "slowdown_vs_baseline": 1.692931
+        },
+        "full": {
+          "ms": 9.856443,
+          "mode": "full",
+          "slowdown_vs_baseline": 1.74723
+        }
+      },
+      "best_variant": "v_prune_only",
+      "recommendation": "V-prune-only is the fastest end-to-end SpAtten variant; next step should simplify the fused path so it inherits the standalone V-prune gains."
+    },
+    {
+      "seq_len": 4096,
+      "input_source": "local tokenizer cache: bert-base-uncased",
+      "results": {
+        "baseline": {
+          "ms": 5.516049,
+          "mode": "baseline",
+          "slowdown_vs_baseline": 1.0
+        },
+        "quant_only": {
+          "ms": 10.177707,
+          "mode": "quant_only",
+          "slowdown_vs_baseline": 1.845108
+        },
+        "v_prune_only": {
+          "ms": 9.554978,
+          "mode": "v_prune_only",
+          "slowdown_vs_baseline": 1.732214
+        },
+        "full": {
+          "ms": 9.951436,
+          "mode": "full",
+          "slowdown_vs_baseline": 1.804088
+        }
+      },
+      "best_variant": "v_prune_only",
+      "recommendation": "V-prune-only is the fastest end-to-end SpAtten variant; next step should simplify the fused path so it inherits the standalone V-prune gains."
+    }
+  ]
+}

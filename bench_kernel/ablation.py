@@ -10,7 +10,9 @@ import triton
 from spatten_bert_ultimate import (
     TRITON_META_DEFAULTS,
     triton_fused_spatten_ultimate,
+    triton_fused_spatten_ultimate_block_skip,
     triton_fused_spatten_v_prune,
+    triton_fused_spatten_v_prune_block_skip,
     triton_progressive_qk,
 )
 
@@ -47,9 +49,34 @@ def bench_v_prune_only(q, k_full, v, v_threshold, sm_scale, meta):
     )
 
 
+def bench_v_prune_block_only(q, k_full, v, v_threshold, sm_scale, meta):
+    return triton.testing.do_bench(
+        lambda: triton_fused_spatten_v_prune_block_skip(
+            q, k_full, v, v_threshold, sm_scale, meta=meta
+        )
+    )
+
+
 def bench_full(q, k_msb, k_lsb, v, out_sum, quant_threshold, v_threshold, sm_scale, meta):
     return triton.testing.do_bench(
         lambda: triton_fused_spatten_ultimate(
+            q,
+            k_msb,
+            k_lsb,
+            v,
+            out_sum,
+            quant_threshold,
+            v_threshold,
+            sm_scale,
+            meta=meta,
+            collect_stats=False,
+        )
+    )
+
+
+def bench_full_block_only(q, k_msb, k_lsb, v, out_sum, quant_threshold, v_threshold, sm_scale, meta):
+    return triton.testing.do_bench(
+        lambda: triton_fused_spatten_ultimate_block_skip(
             q,
             k_msb,
             k_lsb,
@@ -68,16 +95,30 @@ def make_recommendation(results):
     sdpa_ms = results["attention_only"]["ms"]
     quant_ms = results["quant_only"]["ms"]
     v_prune_ms = results["v_prune_only"]["ms"]
+    v_prune_block_ms = results["v_prune_block_only"]["ms"]
     full_ms = results["full"]["ms"]
+    full_block_ms = results["full_block_only"]["ms"]
 
     triton_variants = {
         "quant_only": quant_ms,
         "v_prune_only": v_prune_ms,
+        "v_prune_block_only": v_prune_block_ms,
         "full": full_ms,
+        "full_block_only": full_block_ms,
     }
     best_variant = min(triton_variants, key=triton_variants.get)
 
-    if full_ms <= min(quant_ms, v_prune_ms):
+    if full_block_ms < full_ms:
+        return (
+            "Block-skip-only fused kernel beats the current fine-grained fused path. "
+            "Next step should be simplifying or removing the fine-grained V mask path from the hot kernel."
+        )
+    if v_prune_block_ms < v_prune_ms:
+        return (
+            "Block-skip-only V pruning beats the fine-grained V-prune kernel. "
+            "This points directly to masked V loads and per-element pruning as the current drag."
+        )
+    if full_ms <= min(quant_ms, v_prune_ms, v_prune_block_ms, full_block_ms):
         return (
             "Full fused path is the best Triton variant under the chosen meta. "
             "Next step should be threshold sensitivity scanning around quant_threshold and v_threshold."
@@ -169,10 +210,45 @@ def main():
             ),
             "meta": dict(TRITON_META_DEFAULTS["v_prune"]),
         },
+        "v_prune_block_only": {
+            "ms": round(
+                float(
+                    bench_v_prune_block_only(
+                        q,
+                        k_full,
+                        v,
+                        args.v_threshold,
+                        sm_scale,
+                        meta=dict(TRITON_META_DEFAULTS["v_prune"]),
+                    )
+                ),
+                6,
+            ),
+            "meta": dict(TRITON_META_DEFAULTS["v_prune"]),
+        },
         "full": {
             "ms": round(
                 float(
                     bench_full(
+                        q,
+                        k_msb,
+                        k_lsb,
+                        v,
+                        out_sum,
+                        args.quant_threshold,
+                        args.v_threshold,
+                        sm_scale,
+                        meta=dict(TRITON_META_DEFAULTS["ultimate"]),
+                    )
+                ),
+                6,
+            ),
+            "meta": dict(TRITON_META_DEFAULTS["ultimate"]),
+        },
+        "full_block_only": {
+            "ms": round(
+                float(
+                    bench_full_block_only(
                         q,
                         k_msb,
                         k_lsb,
@@ -221,7 +297,7 @@ def main():
     print("Ablation")
     print(f"Device: {payload['device']}")
     print(f"Shape: B={args.batch}, H={args.heads}, M={args.seq_q}, N={args.seq_k}, D={args.head_dim}")
-    for name in ["attention_only", "quant_only", "v_prune_only", "full"]:
+    for name in ["attention_only", "quant_only", "v_prune_only", "v_prune_block_only", "full", "full_block_only"]:
         item = results[name]
         print(
             f"{name}: ms={item['ms']:.4f} | slowdown_vs_attention_only={item['slowdown_vs_attention_only']:.3f}x "

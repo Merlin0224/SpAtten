@@ -2,7 +2,7 @@ import torch
 import time
 import logging
 import copy
-from spatten_bert_ultimate import (
+from spatten_bert_ultimate_paper_fp32 import (
     SpattenBertSelfAttention,
     build_inputs_local_or_synthetic,
     load_bert_model_local_or_synthetic,
@@ -12,7 +12,7 @@ from transformers.models.bert.modeling_bert import BertEncoder
 
 # 配置日志保存
 logging.basicConfig(
-    filename='benchmark_result.log',
+    filename='benchmark_result_paper_fp32.log',
     filemode='w',
     format='%(asctime)s - %(message)s',
     level=logging.INFO
@@ -80,10 +80,10 @@ def main():
         layer.attention.self = new_atten
 
     spatten_model.encoder.forward = spatten_encoder_forward.__get__(spatten_model.encoder, BertEncoder)
-    spatten_model.to(device).half().eval()
+    spatten_model.to(device).float().eval()
 
     # 执行性能测试
-    print("Running Benchmark...")
+    print("Running Paper-Semantics FP32 Benchmark...")
     orig_time = benchmark_model(orig_model, inputs)
     spatten_time = benchmark_model(spatten_model, inputs, reset_state=True)
     
@@ -98,7 +98,7 @@ def main():
     
     print(msg)
     logging.info(msg)
-    print("Result saved to benchmark_results.log")
+    print("Result saved to benchmark_result_paper_fp32.log")
 
 if __name__ == "__main__":
     main()
