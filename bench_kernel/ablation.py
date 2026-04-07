@@ -7,7 +7,7 @@ from pathlib import Path
 import torch
 import triton
 
-from spatten_bert_ultimate import (
+from spattn.spatten_bert_ultimate import (
     TRITON_META_DEFAULTS,
     triton_fused_spatten_ultimate,
     triton_fused_spatten_ultimate_block_skip,

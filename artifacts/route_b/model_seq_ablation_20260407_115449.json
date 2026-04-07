@@ -1,0 +1,218 @@
+{
+  "timestamp": "20260407_115449",
+  "device": "NVIDIA GeForce RTX 3090",
+  "model_source": "synthetic BertConfig() weights (max_position_embeddings=8194)",
+  "seq_lens": [
+    128,
+    256,
+    512,
+    1024,
+    2048,
+    4096,
+    8192
+  ],
+  "warmup": 10,
+  "iters": 30,
+  "token_prune_num": 2,
+  "head_prune_num": 2,
+  "enable_head_prune": true,
+  "enable_token_prune": true,
+  "results": [
+    {
+      "seq_len": 128,
+      "input_source": "synthetic exact-length token ids (seq_len=128)",
+      "results": {
+        "baseline": {
+          "ms": 7.744785,
+          "mode": "baseline",
+          "slowdown_vs_baseline": 1.0
+        },
+        "quant_only": {
+          "ms": 17.166949,
+          "mode": "quant_only",
+          "slowdown_vs_baseline": 2.216582
+        },
+        "v_prune_only": {
+          "ms": 16.664542,
+          "mode": "v_prune_only",
+          "slowdown_vs_baseline": 2.151711
+        },
+        "full": {
+          "ms": 17.686017,
+          "mode": "full",
+          "slowdown_vs_baseline": 2.283603
+        }
+      },
+      "best_variant": "v_prune_only",
+      "recommendation": "V-prune-only is the fastest end-to-end SpAtten variant; next step should simplify the fused path so it inherits the standalone V-prune gains."
+    },
+    {
+      "seq_len": 256,
+      "input_source": "synthetic exact-length token ids (seq_len=256)",
+      "results": {
+        "baseline": {
+          "ms": 7.849335,
+          "mode": "baseline",
+          "slowdown_vs_baseline": 1.0
+        },
+        "quant_only": {
+          "ms": 17.872656,
+          "mode": "quant_only",
+          "slowdown_vs_baseline": 2.276964
+        },
+        "v_prune_only": {
+          "ms": 16.135099,
+          "mode": "v_prune_only",
+          "slowdown_vs_baseline": 2.055601
+        },
+        "full": {
+          "ms": 18.029704,
+          "mode": "full",
+          "slowdown_vs_baseline": 2.296972
+        }
+      },
+      "best_variant": "v_prune_only",
+      "recommendation": "V-prune-only is the fastest end-to-end SpAtten variant; next step should simplify the fused path so it inherits the standalone V-prune gains."
+    },
+    {
+      "seq_len": 512,
+      "input_source": "synthetic exact-length token ids (seq_len=512)",
+      "results": {
+        "baseline": {
+          "ms": 9.089434,
+          "mode": "baseline",
+          "slowdown_vs_baseline": 1.0
+        },
+        "quant_only": {
+          "ms": 17.540983,
+          "mode": "quant_only",
+          "slowdown_vs_baseline": 1.929821
+        },
+        "v_prune_only": {
+          "ms": 15.130965,
+          "mode": "v_prune_only",
+          "slowdown_vs_baseline": 1.664676
+        },
+        "full": {
+          "ms": 17.559414,
+          "mode": "full",
+          "slowdown_vs_baseline": 1.931849
+        }
+      },
+      "best_variant": "v_prune_only",
+      "recommendation": "V-prune-only is the fastest end-to-end SpAtten variant; next step should simplify the fused path so it inherits the standalone V-prune gains."
+    },
+    {
+      "seq_len": 1024,
+      "input_source": "synthetic exact-length token ids (seq_len=1024)",
+      "results": {
+        "baseline": {
+          "ms": 18.370013,
+          "mode": "baseline",
+          "slowdown_vs_baseline": 1.0
+        },
+        "quant_only": {
+          "ms": 17.675366,
+          "mode": "quant_only",
+          "slowdown_vs_baseline": 0.962186
+        },
+        "v_prune_only": {
+          "ms": 16.262793,
+          "mode": "v_prune_only",
+          "slowdown_vs_baseline": 0.88529
+        },
+        "full": {
+          "ms": 17.562213,
+          "mode": "full",
+          "slowdown_vs_baseline": 0.956026
+        }
+      },
+      "best_variant": "v_prune_only",
+      "recommendation": "V-prune-only is the fastest end-to-end SpAtten variant; next step should simplify the fused path so it inherits the standalone V-prune gains."
+    },
+    {
+      "seq_len": 2048,
+      "input_source": "synthetic exact-length token ids (seq_len=2048)",
+      "results": {
+        "baseline": {
+          "ms": 46.403825,
+          "mode": "baseline",
+          "slowdown_vs_baseline": 1.0
+        },
+        "quant_only": {
+          "ms": 25.974512,
+          "mode": "quant_only",
+          "slowdown_vs_baseline": 0.559749
+        },
+        "v_prune_only": {
+          "ms": 25.342395,
+          "mode": "v_prune_only",
+          "slowdown_vs_baseline": 0.546127
+        },
+        "full": {
+          "ms": 26.238224,
+          "mode": "full",
+          "slowdown_vs_baseline": 0.565432
+        }
+      },
+      "best_variant": "v_prune_only",
+      "recommendation": "V-prune-only is the fastest end-to-end SpAtten variant; next step should simplify the fused path so it inherits the standalone V-prune gains."
+    },
+    {
+      "seq_len": 4096,
+      "input_source": "synthetic exact-length token ids (seq_len=4096)",
+      "results": {
+        "baseline": {
+          "ms": 127.658293,
+          "mode": "baseline",
+          "slowdown_vs_baseline": 1.0
+        },
+        "quant_only": {
+          "ms": 53.343469,
+          "mode": "quant_only",
+          "slowdown_vs_baseline": 0.417861
+        },
+        "v_prune_only": {
+          "ms": 50.487366,
+          "mode": "v_prune_only",
+          "slowdown_vs_baseline": 0.395488
+        },
+        "full": {
+          "ms": 50.717424,
+          "mode": "full",
+          "slowdown_vs_baseline": 0.39729
+        }
+      },
+      "best_variant": "v_prune_only",
+      "recommendation": "V-prune-only is the fastest end-to-end SpAtten variant; next step should simplify the fused path so it inherits the standalone V-prune gains."
+    },
+    {
+      "seq_len": 8192,
+      "input_source": "synthetic exact-length token ids (seq_len=8192)",
+      "results": {
+        "baseline": {
+          "ms": 434.679069,
+          "mode": "baseline",
+          "slowdown_vs_baseline": 1.0
+        },
+        "quant_only": {
+          "ms": 125.846867,
+          "mode": "quant_only",
+          "slowdown_vs_baseline": 0.289517
+        },
+        "v_prune_only": {
+          "ms": 118.739697,
+          "mode": "v_prune_only",
+          "slowdown_vs_baseline": 0.273166
+        },
+        "full": {
+          "ms": 113.563273,
+          "mode": "full",
+          "slowdown_vs_baseline": 0.261258
+        }
+      },
+      "best_variant": "full",
+      "recommendation": "Full end-to-end path is the fastest SpAtten variant; next step should target the fused kernel plus Python scheduling overhead together."
+    }
+  ]
+}

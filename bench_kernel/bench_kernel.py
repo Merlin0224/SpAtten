@@ -1,4 +1,4 @@
-from spatten_bert_ultimate import _spatten_fused_ultimate_kernel, triton_fused_spatten_ultimate
+from spattn.spatten_bert_ultimate import _spatten_fused_ultimate_kernel, triton_fused_spatten_ultimate
 import torch
 import time
 import triton

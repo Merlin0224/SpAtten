@@ -6,8 +6,8 @@ from pathlib import Path
 
 import torch
 
-from benchmark_paper_fp32 import benchmark_model, reset_spatten_states
-from spatten_bert_ultimate_paper_fp32 import (
+from benchmark.benchmark_bf16_msb import benchmark_model, reset_spatten_states
+from spattn.spatten_bert_bf16_msb import (
     SpattenBertSelfAttention,
     build_inputs_local_or_synthetic,
     load_bert_model_local_or_synthetic,
@@ -90,7 +90,7 @@ def recommend(results):
     if best_mode == "full":
         return "Full end-to-end path is the fastest SpAtten variant; next step should target the fused kernel plus Python scheduling overhead together."
     if best_mode == "quant_only":
-        return "Quant-only is the fastest end-to-end SpAtten variant; next step should keep focusing on the paper-semantics FP32 progressive quantization path."
+        return "Quant-only is the fastest end-to-end SpAtten variant; next step should keep focusing on the BF16-MSB progressive quantization path."
     if best_mode == "v_prune_only":
         return "V-prune-only is the fastest end-to-end SpAtten variant; next step should simplify the fused path so it inherits the standalone V-prune gains."
     if best_ms > baseline_ms:
@@ -99,7 +99,7 @@ def recommend(results):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Route-B paper-semantics FP32 model-level ablation benchmark.")
+    parser = argparse.ArgumentParser(description="Route-B paper BF16-MSB model-level ablation benchmark.")
     parser.add_argument("--seq-len", type=int, default=128)
     parser.add_argument("--warmup", type=int, default=10)
     parser.add_argument("--iters", type=int, default=50)
@@ -112,7 +112,7 @@ def main():
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     if device != "cuda":
-        raise RuntimeError("CUDA is required for route_b_model_ablation_paper_fp32.py")
+        raise RuntimeError("CUDA is required for route_b_model_ablation_paper_bf16_msb.py")
 
     base_model, model_source = load_bert_model_local_or_synthetic(
         device,
@@ -166,7 +166,7 @@ def main():
     }
     output_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
-    print("Route-B Model Ablation (Paper Semantics FP32)")
+    print("Route-B Model Ablation (Paper BF16-MSB)")
     print(f"Device: {payload['device']}")
     print(f"Model source: {model_source}")
     print(f"Input source: {input_source}")

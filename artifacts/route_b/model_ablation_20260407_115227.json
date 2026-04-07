@@ -1,0 +1,36 @@
+{
+  "timestamp": "20260407_115227",
+  "device": "NVIDIA GeForce RTX 3090",
+  "model_source": "synthetic BertConfig() weights (max_position_embeddings=512)",
+  "input_source": "synthetic exact-length token ids (seq_len=128)",
+  "seq_len": 128,
+  "warmup": 10,
+  "iters": 50,
+  "token_prune_num": 1,
+  "head_prune_num": 1,
+  "enable_head_prune": false,
+  "enable_token_prune": false,
+  "results": {
+    "baseline": {
+      "ms": 7.686062,
+      "mode": "baseline",
+      "slowdown_vs_baseline": 1.0
+    },
+    "quant_only": {
+      "ms": 11.327754,
+      "mode": "quant_only",
+      "slowdown_vs_baseline": 1.473805
+    },
+    "v_prune_only": {
+      "ms": 13.336371,
+      "mode": "v_prune_only",
+      "slowdown_vs_baseline": 1.735137
+    },
+    "full": {
+      "ms": 14.69739,
+      "mode": "full",
+      "slowdown_vs_baseline": 1.912213
+    }
+  },
+  "recommendation": "Quant-only is the fastest end-to-end SpAtten variant; next step should keep focusing on the BF16-MSB progressive quantization path."
+}

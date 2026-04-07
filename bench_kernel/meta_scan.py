@@ -8,7 +8,7 @@ from pathlib import Path
 import torch
 import triton
 
-from spatten_bert_ultimate import TRITON_META_DEFAULTS, triton_fused_spatten_ultimate
+from spattn.spatten_bert_ultimate import TRITON_META_DEFAULTS, triton_fused_spatten_ultimate
 
 try:
     from triton.runtime.errors import OutOfResources

@@ -5,17 +5,16 @@ from pathlib import Path
 
 import torch
 
-from bench_kernel.model_ablation import recommend, run_variant
-from spattn.spatten_bert_ultimate import build_inputs_local_or_synthetic, load_bert_model_local_or_synthetic
+from bench_kernel.model_ablation_fp32 import recommend, run_variant
+from spattn.spatten_bert_fp32 import build_inputs_local_or_synthetic, load_bert_model_local_or_synthetic
 
 
 def parse_int_list(raw_value):
     return [int(item.strip()) for item in raw_value.split(",") if item.strip()]
 
 
-
 def main():
-    parser = argparse.ArgumentParser(description="Route-B model-level sequence-length ablation benchmark.")
+    parser = argparse.ArgumentParser(description="Route-B paper-semantics FP32 model-level sequence-length ablation benchmark.")
     parser.add_argument("--seq-lens", default="128,256,512,1024,2048,4096")
     parser.add_argument("--warmup", type=int, default=10)
     parser.add_argument("--iters", type=int, default=30)
@@ -28,7 +27,7 @@ def main():
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     if device != "cuda":
-        raise RuntimeError("CUDA is required for route_b_model_seq_ablation.py")
+        raise RuntimeError("CUDA is required for route_b_model_seq_ablation_paper_fp32.py")
 
     seq_lens = parse_int_list(args.seq_lens)
     base_model, model_source = load_bert_model_local_or_synthetic(
@@ -37,7 +36,7 @@ def main():
     )
 
     all_results = []
-    print("Route-B Model Seq Ablation")
+    print("Route-B Model Seq Ablation (Paper Semantics FP32)")
     print(f"Device: {torch.cuda.get_device_name(0)}")
     print(f"Model source: {model_source}")
     print(f"Head prune enabled: {args.enable_head_prune} (num={args.head_prune_num})")

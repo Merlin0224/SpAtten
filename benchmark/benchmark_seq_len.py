@@ -3,7 +3,7 @@ import time
 import copy
 from transformers import BertConfig, BertModel
 
-from spatten_bert_ultimate import SpattenBertSelfAttention
+from spattn.spatten_bert_ultimate import SpattenBertSelfAttention
 from module import spatten_encoder_forward
 from transformers.models.bert.modeling_bert import BertEncoder
 

@@ -4,7 +4,7 @@ import time
 
 import torch
 
-from spatten_bert_ultimate import triton_fused_spatten_ultimate
+from spattn.spatten_bert_ultimate import triton_fused_spatten_ultimate
 
 
 def build_inputs(z: int, h: int, m: int, d: int, seed: int, dtype: torch.dtype, device: str):

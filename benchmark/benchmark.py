@@ -2,7 +2,7 @@ import torch
 import time
 import logging
 import copy
-from spatten_bert_ultimate import (
+from spattn.spatten_bert_ultimate import (
     SpattenBertSelfAttention,
     build_inputs_local_or_synthetic,
     load_bert_model_local_or_synthetic,
@@ -12,7 +12,7 @@ from transformers.models.bert.modeling_bert import BertEncoder
 
 # 配置日志保存
 logging.basicConfig(
-    filename='benchmark_result.log',
+    filename='logs/benchmark_result.log',
     filemode='w',
     format='%(asctime)s - %(message)s',
     level=logging.INFO
@@ -98,7 +98,7 @@ def main():
     
     print(msg)
     logging.info(msg)
-    print("Result saved to benchmark_results.log")
+    print(f"Result saved to {logging.getLogger().handlers[0].baseFilename}")
 
 if __name__ == "__main__":
     main()
