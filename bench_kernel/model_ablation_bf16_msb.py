@@ -21,6 +21,8 @@ def configure_spatten_model(
     mode,
     token_prune_num,
     head_prune_num,
+    quant_threshold=0.05,
+    v_threshold=0.05,
     enable_head_prune=False,
     enable_token_prune=False,
 ):
@@ -38,7 +40,8 @@ def configure_spatten_model(
 
         new_attn.enable_prog_quant = mode in {"quant_only", "full"}
         new_attn.enable_v_prune = mode in {"v_prune_only", "full"}
-        new_attn.quant_threshold = 0.05
+        new_attn.quant_threshold = quant_threshold
+        new_attn.v_threshold = v_threshold
         new_attn.v_prune_num = 2
 
         layer.attention.self = new_attn
@@ -57,6 +60,8 @@ def run_variant(
     head_prune_num,
     warmup,
     iters,
+    quant_threshold=0.05,
+    v_threshold=0.05,
     enable_head_prune=False,
     enable_token_prune=False,
 ):
@@ -72,6 +77,8 @@ def run_variant(
         mode,
         token_prune_num,
         head_prune_num,
+        quant_threshold=quant_threshold,
+        v_threshold=v_threshold,
         enable_head_prune=enable_head_prune,
         enable_token_prune=enable_token_prune,
     )
@@ -105,6 +112,8 @@ def main():
     parser.add_argument("--iters", type=int, default=50)
     parser.add_argument("--token-prune-num", type=int, default=1)
     parser.add_argument("--head-prune-num", type=int, default=1)
+    parser.add_argument("--quant-threshold", type=float, default=0.05)
+    parser.add_argument("--v-threshold", type=float, default=0.05)
     parser.add_argument("--enable-head-prune", action="store_true")
     parser.add_argument("--enable-token-prune", action="store_true")
     parser.add_argument("--output-dir", default="artifacts/route_b")
@@ -135,6 +144,8 @@ def main():
             args.head_prune_num,
             args.warmup,
             args.iters,
+            quant_threshold=args.quant_threshold,
+            v_threshold=args.v_threshold,
             enable_head_prune=args.enable_head_prune,
             enable_token_prune=args.enable_token_prune,
         )
@@ -159,6 +170,8 @@ def main():
         "iters": args.iters,
         "token_prune_num": args.token_prune_num,
         "head_prune_num": args.head_prune_num,
+        "quant_threshold": args.quant_threshold,
+        "v_threshold": args.v_threshold,
         "enable_head_prune": args.enable_head_prune,
         "enable_token_prune": args.enable_token_prune,
         "results": results,

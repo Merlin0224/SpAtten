@@ -1,0 +1,101 @@
+{
+  "timestamp": "20260407_135318",
+  "device": "NVIDIA GeForce RTX 3090",
+  "model_source": "synthetic BertConfig() weights (max_position_embeddings=8194)",
+  "compile_status": "per-seq compile with mode=default, dynamic=False",
+  "compile_mode": "default",
+  "compile_dynamic": false,
+  "spatten_mode": "full",
+  "enable_head_prune": false,
+  "enable_token_prune": false,
+  "token_prune_num": 1,
+  "head_prune_num": 1,
+  "seq_lens": [
+    128,
+    256,
+    512,
+    1024,
+    2048,
+    4096,
+    8192
+  ],
+  "results": [
+    {
+      "seq_len": 128,
+      "input_source": "synthetic exact-length token ids (seq_len=128)",
+      "eager_ms": 7.588761,
+      "compile_ms": 5.740646,
+      "spatten_ms": 10.23563,
+      "compile_runtime_status": "torch.compile(mode=default, dynamic=False)",
+      "compile_speedup_vs_eager": 1.321935,
+      "spatten_speedup_vs_eager": 0.741406,
+      "best": "compile"
+    },
+    {
+      "seq_len": 256,
+      "input_source": "synthetic exact-length token ids (seq_len=256)",
+      "eager_ms": 5.126008,
+      "compile_ms": 5.760273,
+      "spatten_ms": 10.242014,
+      "compile_runtime_status": "torch.compile(mode=default, dynamic=False)",
+      "compile_speedup_vs_eager": 0.88989,
+      "spatten_speedup_vs_eager": 0.500488,
+      "best": "eager"
+    },
+    {
+      "seq_len": 512,
+      "input_source": "synthetic exact-length token ids (seq_len=512)",
+      "eager_ms": 6.255274,
+      "compile_ms": 6.678151,
+      "spatten_ms": 10.220923,
+      "compile_runtime_status": "torch.compile(mode=default, dynamic=False)",
+      "compile_speedup_vs_eager": 0.936678,
+      "spatten_speedup_vs_eager": 0.612007,
+      "best": "eager"
+    },
+    {
+      "seq_len": 1024,
+      "input_source": "synthetic exact-length token ids (seq_len=1024)",
+      "eager_ms": 14.474855,
+      "compile_ms": 15.235993,
+      "spatten_ms": 11.292399,
+      "compile_runtime_status": "torch.compile(mode=default, dynamic=False)",
+      "compile_speedup_vs_eager": 0.950043,
+      "spatten_speedup_vs_eager": 1.281823,
+      "best": "spatten"
+    },
+    {
+      "seq_len": 2048,
+      "input_source": "synthetic exact-length token ids (seq_len=2048)",
+      "eager_ms": 39.183256,
+      "compile_ms": 39.309757,
+      "spatten_ms": 25.735647,
+      "compile_runtime_status": "torch.compile(mode=default, dynamic=False)",
+      "compile_speedup_vs_eager": 0.996782,
+      "spatten_speedup_vs_eager": 1.522528,
+      "best": "spatten"
+    },
+    {
+      "seq_len": 4096,
+      "input_source": "synthetic exact-length token ids (seq_len=4096)",
+      "eager_ms": 113.075952,
+      "compile_ms": 111.946175,
+      "spatten_ms": 55.393791,
+      "compile_runtime_status": "torch.compile(mode=default, dynamic=False)",
+      "compile_speedup_vs_eager": 1.010092,
+      "spatten_speedup_vs_eager": 2.041311,
+      "best": "spatten"
+    },
+    {
+      "seq_len": 8192,
+      "input_source": "synthetic exact-length token ids (seq_len=8192)",
+      "eager_ms": 402.505957,
+      "compile_ms": 402.467253,
+      "spatten_ms": 143.924772,
+      "compile_runtime_status": "torch.compile(mode=default, dynamic=False)",
+      "compile_speedup_vs_eager": 1.000096,
+      "spatten_speedup_vs_eager": 2.796641,
+      "best": "spatten"
+    }
+  ]
+}

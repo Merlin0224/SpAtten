@@ -1,0 +1,101 @@
+{
+  "timestamp": "20260407_163352",
+  "device": "NVIDIA GeForce RTX 3090",
+  "model_source": "synthetic BertConfig() weights (max_position_embeddings=8194)",
+  "compile_status": "per-seq compile with mode=max-autotune-no-cudagraphs, dynamic=False",
+  "compile_mode": "max-autotune-no-cudagraphs",
+  "compile_dynamic": false,
+  "spatten_mode": "full",
+  "enable_head_prune": false,
+  "enable_token_prune": false,
+  "token_prune_num": 1,
+  "head_prune_num": 1,
+  "seq_lens": [
+    128,
+    256,
+    512,
+    1024,
+    2048,
+    4096,
+    8192
+  ],
+  "results": [
+    {
+      "seq_len": 128,
+      "input_source": "synthetic exact-length token ids (seq_len=128)",
+      "eager_ms": 8.962492,
+      "compile_ms": 8.112777,
+      "spatten_ms": 17.075747,
+      "compile_runtime_status": "torch.compile(mode=max-autotune-no-cudagraphs, dynamic=False)",
+      "compile_speedup_vs_eager": 1.104738,
+      "spatten_speedup_vs_eager": 0.524867,
+      "best": "compile"
+    },
+    {
+      "seq_len": 256,
+      "input_source": "synthetic exact-length token ids (seq_len=256)",
+      "eager_ms": 8.554803,
+      "compile_ms": 5.87462,
+      "spatten_ms": 11.402514,
+      "compile_runtime_status": "torch.compile(mode=max-autotune-no-cudagraphs, dynamic=False)",
+      "compile_speedup_vs_eager": 1.456231,
+      "spatten_speedup_vs_eager": 0.750256,
+      "best": "compile"
+    },
+    {
+      "seq_len": 512,
+      "input_source": "synthetic exact-length token ids (seq_len=512)",
+      "eager_ms": 6.340232,
+      "compile_ms": 8.412502,
+      "spatten_ms": 17.610649,
+      "compile_runtime_status": "torch.compile(mode=max-autotune-no-cudagraphs, dynamic=False)",
+      "compile_speedup_vs_eager": 0.753668,
+      "spatten_speedup_vs_eager": 0.360023,
+      "best": "eager"
+    },
+    {
+      "seq_len": 1024,
+      "input_source": "synthetic exact-length token ids (seq_len=1024)",
+      "eager_ms": 14.604254,
+      "compile_ms": 13.969066,
+      "spatten_ms": 17.852417,
+      "compile_runtime_status": "torch.compile(mode=max-autotune-no-cudagraphs, dynamic=False)",
+      "compile_speedup_vs_eager": 1.045471,
+      "spatten_speedup_vs_eager": 0.818055,
+      "best": "compile"
+    },
+    {
+      "seq_len": 2048,
+      "input_source": "synthetic exact-length token ids (seq_len=2048)",
+      "eager_ms": 39.522441,
+      "compile_ms": 36.006706,
+      "spatten_ms": 25.867059,
+      "compile_runtime_status": "torch.compile(mode=max-autotune-no-cudagraphs, dynamic=False)",
+      "compile_speedup_vs_eager": 1.097641,
+      "spatten_speedup_vs_eager": 1.527906,
+      "best": "spatten"
+    },
+    {
+      "seq_len": 4096,
+      "input_source": "synthetic exact-length token ids (seq_len=4096)",
+      "eager_ms": 113.65328,
+      "compile_ms": 108.648991,
+      "spatten_ms": 56.227327,
+      "compile_runtime_status": "torch.compile(mode=max-autotune-no-cudagraphs, dynamic=False)",
+      "compile_speedup_vs_eager": 1.046059,
+      "spatten_speedup_vs_eager": 2.021317,
+      "best": "spatten"
+    },
+    {
+      "seq_len": 8192,
+      "input_source": "synthetic exact-length token ids (seq_len=8192)",
+      "eager_ms": 403.506543,
+      "compile_ms": 396.735449,
+      "spatten_ms": 143.733626,
+      "compile_runtime_status": "torch.compile(mode=max-autotune-no-cudagraphs, dynamic=False)",
+      "compile_speedup_vs_eager": 1.017067,
+      "spatten_speedup_vs_eager": 2.807322,
+      "best": "spatten"
+    }
+  ]
+}

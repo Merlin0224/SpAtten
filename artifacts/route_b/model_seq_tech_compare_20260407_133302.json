@@ -1,0 +1,101 @@
+{
+  "timestamp": "20260407_133302",
+  "device": "NVIDIA GeForce RTX 3090",
+  "model_source": "synthetic BertConfig() weights (max_position_embeddings=8194)",
+  "compile_status": "torch.compile(mode=reduce-overhead, dynamic=False)",
+  "compile_mode": "reduce-overhead",
+  "compile_dynamic": false,
+  "spatten_mode": "full",
+  "enable_head_prune": true,
+  "enable_token_prune": true,
+  "token_prune_num": 1,
+  "head_prune_num": 1,
+  "seq_lens": [
+    128,
+    256,
+    512,
+    1024,
+    2048,
+    4096,
+    8192
+  ],
+  "results": [
+    {
+      "seq_len": 128,
+      "input_source": "synthetic exact-length token ids (seq_len=128)",
+      "eager_ms": 5.954526,
+      "compile_ms": 5.954526,
+      "spatten_ms": 20.503961,
+      "compile_runtime_status": "runtime_failed: TypeError: 'NoneType' object is not subscriptable",
+      "compile_speedup_vs_eager": 1.0,
+      "spatten_speedup_vs_eager": 0.290409,
+      "best": "eager"
+    },
+    {
+      "seq_len": 256,
+      "input_source": "synthetic exact-length token ids (seq_len=256)",
+      "eager_ms": 8.722466,
+      "compile_ms": 8.722466,
+      "spatten_ms": 22.221688,
+      "compile_runtime_status": "runtime_failed: TypeError: 'NoneType' object is not subscriptable",
+      "compile_speedup_vs_eager": 1.0,
+      "spatten_speedup_vs_eager": 0.39252,
+      "best": "eager"
+    },
+    {
+      "seq_len": 512,
+      "input_source": "synthetic exact-length token ids (seq_len=512)",
+      "eager_ms": 8.747691,
+      "compile_ms": 8.747691,
+      "spatten_ms": 14.325142,
+      "compile_runtime_status": "runtime_failed: TypeError: 'NoneType' object is not subscriptable",
+      "compile_speedup_vs_eager": 1.0,
+      "spatten_speedup_vs_eager": 0.610653,
+      "best": "eager"
+    },
+    {
+      "seq_len": 1024,
+      "input_source": "synthetic exact-length token ids (seq_len=1024)",
+      "eager_ms": 14.464478,
+      "compile_ms": 14.464478,
+      "spatten_ms": 14.267188,
+      "compile_runtime_status": "runtime_failed: TypeError: 'NoneType' object is not subscriptable",
+      "compile_speedup_vs_eager": 1.0,
+      "spatten_speedup_vs_eager": 1.013828,
+      "best": "spatten"
+    },
+    {
+      "seq_len": 2048,
+      "input_source": "synthetic exact-length token ids (seq_len=2048)",
+      "eager_ms": 38.955078,
+      "compile_ms": 38.955078,
+      "spatten_ms": 20.546049,
+      "compile_runtime_status": "runtime_failed: TypeError: 'NoneType' object is not subscriptable",
+      "compile_speedup_vs_eager": 1.0,
+      "spatten_speedup_vs_eager": 1.895989,
+      "best": "spatten"
+    },
+    {
+      "seq_len": 4096,
+      "input_source": "synthetic exact-length token ids (seq_len=4096)",
+      "eager_ms": 113.107357,
+      "compile_ms": 113.107357,
+      "spatten_ms": 42.513375,
+      "compile_runtime_status": "runtime_failed: TypeError: 'NoneType' object is not subscriptable",
+      "compile_speedup_vs_eager": 1.0,
+      "spatten_speedup_vs_eager": 2.660512,
+      "best": "spatten"
+    },
+    {
+      "seq_len": 8192,
+      "input_source": "synthetic exact-length token ids (seq_len=8192)",
+      "eager_ms": 407.203158,
+      "compile_ms": 407.203158,
+      "spatten_ms": 101.598722,
+      "compile_runtime_status": "runtime_failed: TypeError: 'NoneType' object is not subscriptable",
+      "compile_speedup_vs_eager": 1.0,
+      "spatten_speedup_vs_eager": 4.007956,
+      "best": "spatten"
+    }
+  ]
+}

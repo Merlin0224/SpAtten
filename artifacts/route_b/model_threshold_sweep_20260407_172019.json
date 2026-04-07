@@ -1,0 +1,84 @@
+{
+  "timestamp": "20260407_172019",
+  "device": "NVIDIA GeForce RTX 3090",
+  "model_source": "synthetic BertConfig() weights (max_position_embeddings=2050)",
+  "input_source": "synthetic exact-length token ids (seq_len=2048)",
+  "seq_len": 2048,
+  "mode": "quant_only",
+  "warmup": 10,
+  "iters": 30,
+  "token_prune_num": 1,
+  "head_prune_num": 1,
+  "enable_head_prune": false,
+  "enable_token_prune": false,
+  "baseline": {
+    "ms": 46.523527,
+    "mode": "baseline"
+  },
+  "results": [
+    {
+      "ms": 34.179688,
+      "mode": "quant_only",
+      "quant_threshold": 0.01,
+      "v_threshold": 0.0,
+      "slowdown_vs_baseline": 0.734675,
+      "speedup_vs_baseline": 1.361145
+    },
+    {
+      "ms": 34.211772,
+      "mode": "quant_only",
+      "quant_threshold": 0.0,
+      "v_threshold": 0.0,
+      "slowdown_vs_baseline": 0.735365,
+      "speedup_vs_baseline": 1.359869
+    },
+    {
+      "ms": 34.389368,
+      "mode": "quant_only",
+      "quant_threshold": 0.05,
+      "v_threshold": 0.0,
+      "slowdown_vs_baseline": 0.739182,
+      "speedup_vs_baseline": 1.352846
+    },
+    {
+      "ms": 34.395886,
+      "mode": "quant_only",
+      "quant_threshold": 0.08,
+      "v_threshold": 0.0,
+      "slowdown_vs_baseline": 0.739322,
+      "speedup_vs_baseline": 1.35259
+    },
+    {
+      "ms": 34.41036,
+      "mode": "quant_only",
+      "quant_threshold": 0.03,
+      "v_threshold": 0.0,
+      "slowdown_vs_baseline": 0.739634,
+      "speedup_vs_baseline": 1.352021
+    },
+    {
+      "ms": 34.446403,
+      "mode": "quant_only",
+      "quant_threshold": 0.1,
+      "v_threshold": 0.0,
+      "slowdown_vs_baseline": 0.740408,
+      "speedup_vs_baseline": 1.350606
+    },
+    {
+      "ms": 34.485453,
+      "mode": "quant_only",
+      "quant_threshold": 0.2,
+      "v_threshold": 0.0,
+      "slowdown_vs_baseline": 0.741248,
+      "speedup_vs_baseline": 1.349077
+    }
+  ],
+  "best": {
+    "ms": 34.179688,
+    "mode": "quant_only",
+    "quant_threshold": 0.01,
+    "v_threshold": 0.0,
+    "slowdown_vs_baseline": 0.734675,
+    "speedup_vs_baseline": 1.361145
+  }
+}

@@ -987,6 +987,8 @@ class SpattenBertSelfAttention(BertSelfAttention):
 
         # Token 剪枝控制
         self.enable_token_prune = False
+        self.token_prune_start_layer = 0
+        self.token_prune_interval = 1
         self.token_prune_num = 0 # 本层要剪掉的Token数量
         self.cumulative_token_score = None # 累积的Token重要性分数，用于级联传递 [Batch, SeqLen]
         self.next_active_token_indices = None # 下一层要保留的Token索引
@@ -995,9 +997,13 @@ class SpattenBertSelfAttention(BertSelfAttention):
         self.enable_v_prune = False # 是否启用局部 Value 剪枝
         self.v_prune_num = 2 # 每个Head内部要剪掉的Value维度数量
 
-        # 将近式量化控制
+        # 渐近式量化控制
         self.enable_prog_quant = False
-        self.quant_threshold = 1.0 
+        self.quant_threshold = 1.0
+        self.v_threshold = 0.05
+        self.head_prune_start_layer = 0
+        self.head_prune_interval = 1
+        self.layer_idx = -1
     
     def transpose_for_out(self, x, n_heads):
         if x.dim() == 2:
@@ -1041,7 +1047,6 @@ class SpattenBertSelfAttention(BertSelfAttention):
         if self.enable_prog_quant and self.enable_v_prune:
             # 【终极融合路径】同时开启渐进式量化和局部V剪枝
             k_msb, k_lsb = prepare_progressive_k_bf16_msb(key_layer)
-            dynamic_v_threshold = 0.05 
             
             # 准备一个专门放概率和的 buffer
             out_sum = torch.zeros((bs, cur_heads, seq_len), device=device, dtype=torch.float32)
@@ -1049,7 +1054,7 @@ class SpattenBertSelfAttention(BertSelfAttention):
             context_layer = triton_fused_spatten_ultimate(
                 query_layer, k_msb, k_lsb, value_layer, out_sum, # 传入 buffer
                 quant_threshold=self.quant_threshold,
-                v_threshold=0.05,
+                v_threshold=self.v_threshold,
                 sm_scale=sm_scale,
                 collect_stats=True,
             )
@@ -1071,11 +1076,10 @@ class SpattenBertSelfAttention(BertSelfAttention):
 
         elif self.enable_v_prune and self.v_prune_num > 0:
             # 【仅开启局部 V 剪枝】
-            dynamic_v_threshold = 0.05 
             out_sum = torch.zeros((bs, cur_heads, seq_len), device=device, dtype=torch.float32)
             context_layer = triton_fused_spatten_v_prune_block_skip(
                 query_layer, key_layer, value_layer,
-                v_threshold=dynamic_v_threshold, sm_scale=sm_scale,
+                v_threshold=self.v_threshold, sm_scale=sm_scale,
                 out_sum=out_sum,
                 collect_stats=True,
             )
@@ -1107,6 +1111,11 @@ class SpattenBertSelfAttention(BertSelfAttention):
         head_importance = context_layer.abs().mean(dim=importance_dims)
         next_head_indices = active_head_indices
 
+        head_prune_active = (
+            self.enable_head_prune
+            and self.layer_idx >= self.head_prune_start_layer
+            and ((self.layer_idx - self.head_prune_start_layer) % max(1, self.head_prune_interval) == 0)
+        )
         if self.enable_head_prune and cur_heads > self.head_prune_num:
             keep_k = max(1, cur_heads - self.head_prune_num) # Ensure at least 1 head remains
             _, topk_indices = torch.topk(head_importance, k=keep_k)
@@ -1122,6 +1131,11 @@ class SpattenBertSelfAttention(BertSelfAttention):
             self.cumulative_token_score += current_token_importance
 
         next_token_indices = None
+        token_prune_active = (
+            self.enable_token_prune
+            and self.layer_idx >= self.token_prune_start_layer
+            and ((self.layer_idx - self.token_prune_start_layer) % max(1, self.token_prune_interval) == 0)
+        )
         if self.enable_token_prune and seq_len > self.token_prune_num:
             keep_k_tokens = max(1, seq_len - self.token_prune_num)
             _, topk_token_indices = torch.topk(self.cumulative_token_score, k=keep_k_tokens, dim=1)
@@ -1170,6 +1184,7 @@ def main():
         orig_state_dict = layer.attention.self.state_dict()
         new_attn = SpattenBertSelfAttention(spatten_model.config)
         new_attn.load_state_dict(orig_state_dict)
+        new_attn.layer_idx = i
         layer.attention.self = new_attn
     
     spatten_model.encoder.forward = spatten_encoder_forward.__get__(spatten_model.encoder, BertEncoder)
