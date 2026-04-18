@@ -1,0 +1,170 @@
+{
+  "timestamp": "20260418_211047",
+  "device": "NVIDIA GeForce RTX 3090",
+  "model_source": "synthetic BertConfig() weights (max_position_embeddings=8194)",
+  "seq_lens": [
+    1024,
+    2048,
+    4096,
+    8192
+  ],
+  "warmup": 10,
+  "iters": 30,
+  "graph_warmup": 3,
+  "spatten_mode": "full",
+  "token_prune_num": 1,
+  "head_prune_num": 1,
+  "quant_threshold": 0.01,
+  "v_threshold": 0.05,
+  "head_prune_start_layer": 0,
+  "token_prune_start_layer": 0,
+  "head_prune_interval": 1,
+  "token_prune_interval": 2,
+  "enable_head_prune": true,
+  "enable_token_prune": true,
+  "enable_delayed_token_compaction": false,
+  "token_compact_interval": 1,
+  "token_compact_min_drop_ratio": 1.0,
+  "enable_token_stage_pruning": false,
+  "token_stage_size": 1,
+  "token_stage_weighting": "uniform",
+  "ffn_compile_mode": "default",
+  "ffn_compile_status": [
+    {
+      "layer_idx": 0,
+      "status": "torch.compile(mode=default, dynamic=False)"
+    },
+    {
+      "layer_idx": 1,
+      "status": "torch.compile(mode=default, dynamic=False)"
+    },
+    {
+      "layer_idx": 2,
+      "status": "torch.compile(mode=default, dynamic=False)"
+    },
+    {
+      "layer_idx": 3,
+      "status": "torch.compile(mode=default, dynamic=False)"
+    },
+    {
+      "layer_idx": 4,
+      "status": "torch.compile(mode=default, dynamic=False)"
+    },
+    {
+      "layer_idx": 5,
+      "status": "torch.compile(mode=default, dynamic=False)"
+    },
+    {
+      "layer_idx": 6,
+      "status": "torch.compile(mode=default, dynamic=False)"
+    },
+    {
+      "layer_idx": 7,
+      "status": "torch.compile(mode=default, dynamic=False)"
+    },
+    {
+      "layer_idx": 8,
+      "status": "torch.compile(mode=default, dynamic=False)"
+    },
+    {
+      "layer_idx": 9,
+      "status": "torch.compile(mode=default, dynamic=False)"
+    },
+    {
+      "layer_idx": 10,
+      "status": "torch.compile(mode=default, dynamic=False)"
+    },
+    {
+      "layer_idx": 11,
+      "status": "torch.compile(mode=default, dynamic=False)"
+    }
+  ],
+  "ffn_graph_status": [
+    {
+      "layer_idx": 0,
+      "status": "cuda_graph(warmup=3)"
+    },
+    {
+      "layer_idx": 1,
+      "status": "cuda_graph(warmup=3)"
+    },
+    {
+      "layer_idx": 2,
+      "status": "cuda_graph(warmup=3)"
+    },
+    {
+      "layer_idx": 3,
+      "status": "cuda_graph(warmup=3)"
+    },
+    {
+      "layer_idx": 4,
+      "status": "cuda_graph(warmup=3)"
+    },
+    {
+      "layer_idx": 5,
+      "status": "cuda_graph(warmup=3)"
+    },
+    {
+      "layer_idx": 6,
+      "status": "cuda_graph(warmup=3)"
+    },
+    {
+      "layer_idx": 7,
+      "status": "cuda_graph(warmup=3)"
+    },
+    {
+      "layer_idx": 8,
+      "status": "cuda_graph(warmup=3)"
+    },
+    {
+      "layer_idx": 9,
+      "status": "cuda_graph(warmup=3)"
+    },
+    {
+      "layer_idx": 10,
+      "status": "cuda_graph(warmup=3)"
+    },
+    {
+      "layer_idx": 11,
+      "status": "cuda_graph(warmup=3)"
+    }
+  ],
+  "results": [
+    {
+      "seq_len": 1024,
+      "input_source": "synthetic exact-length token ids (seq_len=1024)",
+      "baseline_ms": 14.467823,
+      "spatten_ms": 15.637982,
+      "ffn_compile_ms": 15.67942,
+      "ffn_graph_ms": 15.39328,
+      "best": "baseline"
+    },
+    {
+      "seq_len": 2048,
+      "input_source": "synthetic exact-length token ids (seq_len=2048)",
+      "baseline_ms": 37.858988,
+      "spatten_ms": 24.69236,
+      "ffn_compile_ms": 24.68137,
+      "ffn_graph_ms": 24.791892,
+      "best": "ffn_compile"
+    },
+    {
+      "seq_len": 4096,
+      "input_source": "synthetic exact-length token ids (seq_len=4096)",
+      "baseline_ms": 111.480591,
+      "spatten_ms": 46.84882,
+      "ffn_compile_ms": 46.872404,
+      "ffn_graph_ms": 46.915072,
+      "best": "spatten"
+    },
+    {
+      "seq_len": 8192,
+      "input_source": "synthetic exact-length token ids (seq_len=8192)",
+      "baseline_ms": 399.977344,
+      "spatten_ms": 106.098584,
+      "ffn_compile_ms": 105.763363,
+      "ffn_graph_ms": 105.969425,
+      "best": "ffn_compile"
+    }
+  ]
+}

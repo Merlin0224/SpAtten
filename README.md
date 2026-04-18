@@ -26,11 +26,13 @@
 - `spattn/`
   - 主模型与注意力实现
 - `bench_kernel/`
-  - 端到端消融、技术对比、阈值/调度实验脚本
+  - 端到端消融、技术对比、阈值和调度实验脚本
 - `benchmark/`
   - 基础 benchmark 与 CUDA Graph benchmark 工具
 - `module.py`
   - encoder 层间状态传递与 token compaction
+- `archive/`
+  - 历史尝试与早期实验入口，保留实验脉络，不作为当前主线
 
 ## 关键文件
 
@@ -40,12 +42,14 @@
   - `module.py`
 - 主线模型级消融：
   - `bench_kernel/model_seq_ablation_bf16_msb.py`
-- compile 对比：
+- `torch.compile` 对比：
   - `bench_kernel/model_seq_tech_compare.py`
-- graph 对比：
+- Graph-safe 对比：
   - `bench_kernel/model_seq_graph_compare.py`
-- graph 与真实剪枝对比：
+- Graph-safe 与真实剪枝对比：
   - `bench_kernel/model_seq_graph_prune_compare.py`
+- FFN 单独图化对比：
+  - `bench_kernel/model_seq_ffn_graph_compare.py`
 
 ## 当前结论
 
@@ -81,7 +85,7 @@
 在稳定子路径上：
 
 - `torch.compile` 对 baseline 帮助有限
-- `CUDA Graph` 对 graph-safe SpAtten 子路径只有小幅收益
+- CUDA Graph 对 graph-safe SpAtten 子路径只有小幅收益
 
 graph 对比结果显示：
 
@@ -113,6 +117,23 @@ graph-safe 静态路径与真实剪枝路径对比如下：
 - 为了引入 CUDA Graph 而放弃动态剪枝，不值得
 - 真正决定长上下文性能上限的，仍然是动态剪枝算法本身
 
+### 5. 在 SpAtten 主线上单独对 FFN 做 `torch.compile` / CUDA Graph，只有极小边际收益
+
+在 SpAtten `full` 主线基础上，我们只对每层 FFN（`BertIntermediate + BertOutput`）做图化对比，得到结果如下：
+
+| Seq Len | Baseline | SpAtten | FFN-Compile | FFN-Graph | Best |
+| --- | ---: | ---: | ---: | ---: | --- |
+| 1024 | 14.47 | 15.64 | 15.68 | 15.39 | `baseline` |
+| 2048 | 37.86 | 24.69 | 24.68 | 24.79 | `FFN-Compile` |
+| 4096 | 111.48 | 46.85 | 46.87 | 46.92 | `SpAtten` |
+| 8192 | 399.98 | 106.10 | 105.76 | 105.97 | `FFN-Compile` |
+
+结论：
+
+- `FFN-Compile` 和 `FFN-Graph` 都已经包含当前 SpAtten 稀疏注意力主线，并不是“只测 FFN”
+- 在 SpAtten 主线之上，FFN 单独图化只带来极小边际收益，大约是 `0.01 ~ 0.34 ms`
+- 这说明当前主瓶颈仍然不在 FFN，而在动态稀疏注意力与级联剪枝路径
+
 ## 当前不保留为主线的尝试
 
 以下尝试做过实验，但当前不作为默认方向：
@@ -120,9 +141,11 @@ graph-safe 静态路径与真实剪枝路径对比如下：
 - Triton token compaction 替代层间 `gather/index_select`
 - Triton `argmin` 替代 `token_prune_num == 1` 的选择逻辑
 - delayed token compaction
-- 早期 `FP32`/伪量化验证分支
+- stage pruning 及其简单平均、线性加权等变体
+- FFN 单独 `torch.compile` / CUDA Graph 图化
+- 早期 `FP32` / 伪量化验证分支
 
-这些尝试要么收益不稳定，要么被当前 BF16-MSB 主线覆盖。
+这些尝试要么收益不稳定，要么被当前 `BF16-MSB` 主线覆盖。
 
 ## 推荐运行命令
 
@@ -175,15 +198,33 @@ pixi run python -m bench_kernel.model_seq_graph_prune_compare \
   --token-prune-interval 2
 ```
 
+### FFN 单独图化对比
+
+```bash
+pixi run python -m bench_kernel.model_seq_ffn_graph_compare \
+  --seq-lens 1024,2048,4096,8192 \
+  --warmup 10 \
+  --iters 30 \
+  --spatten-mode full \
+  --enable-head-prune \
+  --enable-token-prune \
+  --head-prune-num 1 \
+  --token-prune-num 1 \
+  --quant-threshold 0.01 \
+  --v-threshold 0.05 \
+  --head-prune-interval 1 \
+  --token-prune-interval 2
+```
+
 ## 下一步方向
 
-当前最值得继续做的不是继续抠 kernel，而是优化动态级联剪枝算法本身，重点包括：
+当前最值得继续做的，不是继续抠 kernel，也不是继续在 FFN 图化上花时间，而是优化动态级联剪枝算法本身，重点包括：
 
-- 阶段式 token/head pruning
+- 更 GPU-friendly 的 token/head 决策策略
 - 降低动态决策频率
 - 优化 `cumulative_token_score` 的维护方式
-- 只在收益足够大时再触发物理 compact
+- 只在收益足够大时再触发物理 compaction
 
 一句话总结：
 
-**当前主线已经证明：SpAtten 在长上下文下能在通用 GPU 上取得稳定收益；下一步真正值得投入的，是把动态级联剪枝做得更“GPU 友好”。**
+**当前主线已经证明，SpAtten 在长上下文下能在通用 GPU 上取得稳定收益；下一步真正值得投入的，是把动态级联剪枝做得更“GPU 友好”。**
