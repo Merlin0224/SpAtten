@@ -13,7 +13,7 @@ from transformers.modeling_outputs import BaseModelOutputWithPastAndCrossAttenti
 import triton
 import triton.language as tl
 
-from module import slice_linear_weights, spatten_encoder_forward, slice_qkv_weights
+from module import spatten_encoder_forward
 
 TRITON_META_DEFAULTS = {
     "progressive_qk": {
@@ -103,6 +103,50 @@ def build_inputs_local_or_synthetic(
         inputs = {"input_ids": input_ids, "attention_mask": attention_mask}
         source = f"synthetic token ids (seq_len={seq_len})"
     return inputs, source
+
+
+@triton.jit
+def _block_argmin_kernel(
+    in_ptr,
+    out_val_ptr,
+    out_idx_ptr,
+    length,
+    BLOCK: tl.constexpr,
+):
+    pid = tl.program_id(0)
+    offs = pid * BLOCK + tl.arange(0, BLOCK)
+    mask = offs < length
+    vals = tl.load(in_ptr + offs, mask=mask, other=float("inf"))
+    min_val = tl.min(vals, axis=0)
+    is_min = vals == min_val
+    candidate = tl.where(is_min, offs, length)
+    min_idx = tl.min(candidate, axis=0)
+    tl.store(out_val_ptr + pid, min_val)
+    tl.store(out_idx_ptr + pid, min_idx)
+
+
+def triton_argmin_1d(x, block_size=256):
+    if x.dim() != 1:
+        raise ValueError(f"triton_argmin_1d expects a 1D tensor, got shape {list(x.shape)}")
+    if not x.is_cuda:
+        return torch.argmin(x)
+
+    length = x.numel()
+    num_blocks = triton.cdiv(length, block_size)
+    block_min_vals = torch.empty((num_blocks,), device=x.device, dtype=x.dtype)
+    block_min_idxs = torch.empty((num_blocks,), device=x.device, dtype=torch.int32)
+
+    _block_argmin_kernel[(num_blocks,)](
+        x,
+        block_min_vals,
+        block_min_idxs,
+        length,
+        BLOCK=block_size,
+        num_warps=4,
+        num_stages=1,
+    )
+    best_block = torch.argmin(block_min_vals)
+    return block_min_idxs[best_block].to(torch.long)
 
 # =====================================================================
 # Triton 渐进式量化 Kernel (Progressive Quantization) 和 FlashAttention
@@ -992,6 +1036,16 @@ class SpattenBertSelfAttention(BertSelfAttention):
         self.token_prune_num = 0 # 本层要剪掉的Token数量
         self.cumulative_token_score = None # 累积的Token重要性分数，用于级联传递 [Batch, SeqLen]
         self.next_active_token_indices = None # 下一层要保留的Token索引
+        self.enable_delayed_token_compaction = False
+        self.token_compact_interval = 1
+        self.token_compact_min_drop_ratio = 1.0
+        self.graph_capture_mode = False
+        self.enable_token_stage_pruning = False
+        self.token_stage_size = 1
+        self.token_stage_weighting = "uniform"
+        self.stage_token_score_accum = None
+        self.stage_token_score_count = 0
+        self.stage_token_weight_total = 0.0
 
         # 局部 V 剪枝控制
         self.enable_v_prune = False # 是否启用局部 Value 剪枝
@@ -1028,20 +1082,18 @@ class SpattenBertSelfAttention(BertSelfAttention):
         cur_heads = active_head_indices.size(0)
 
         # 切片获取活跃的 Q, K, V 权重
-        packed_w, packed_b = slice_qkv_weights(
-            self.query,
-            self.key,
-            self.value,
-            active_head_indices,
-            self.num_heads,
-            self.head_dim,
-        )
-        qkv = F.linear(hidden_states, packed_w, packed_b)
-        q_proj, k_proj, v_proj = torch.chunk(qkv, 3, dim=-1)
+        q_proj = self.query(hidden_states)
+        k_proj = self.key(hidden_states)
+        v_proj = self.value(hidden_states)
 
-        query_layer = self.transpose_for_out(q_proj, cur_heads)
-        key_layer = self.transpose_for_out(k_proj, cur_heads)
-        value_layer = self.transpose_for_out(v_proj, cur_heads)
+        query_layer = self.transpose_for_out(q_proj, self.num_heads)
+        key_layer = self.transpose_for_out(k_proj, self.num_heads)
+        value_layer = self.transpose_for_out(v_proj, self.num_heads)
+
+        if cur_heads != self.num_heads:
+            query_layer = query_layer.index_select(1, active_head_indices)
+            key_layer = key_layer.index_select(1, active_head_indices)
+            value_layer = value_layer.index_select(1, active_head_indices)
         
         sm_scale = 1.0 / math.sqrt(self.head_dim)
         attention_probs = None
@@ -1110,57 +1162,94 @@ class SpattenBertSelfAttention(BertSelfAttention):
         # ====================================================================
         # 此时的 attention_probs (不论是原生还是近似) 都会用于 Token Pruning
         # context_layer 将用于 Head Pruning
-        if op:
-            current_token_importance = attention_probs.sum(dim=(1, 2))
-
-        # Head Pruning 决策
-        importance_dims = (0, 2, 3) if context_layer.dim() == 4 else (1, 2)
-        head_importance = context_layer.abs().mean(dim=importance_dims)
-        next_head_indices = active_head_indices
-
-        head_prune_active = (
-            self.enable_head_prune
-            and self.layer_idx >= self.head_prune_start_layer
-            and ((self.layer_idx - self.head_prune_start_layer) % max(1, self.head_prune_interval) == 0)
-        )
-        if head_prune_active and cur_heads > self.head_prune_num:
-            if self.head_prune_num == 1:
-                drop_idx = torch.argmin(head_importance)
-                keep_mask = torch.ones(cur_heads, device=device, dtype=torch.bool)
-                keep_mask[drop_idx] = False
-                next_head_indices = active_head_indices[keep_mask]
-            else:
-                keep_k = max(1, cur_heads - self.head_prune_num) # Ensure at least 1 head remains
-                _, topk_indices = torch.topk(head_importance, k=keep_k)
-                next_head_indices = active_head_indices[topk_indices]
-                next_head_indices = torch.sort(next_head_indices).values
-        
-        self.next_active_head_indices = next_head_indices
-
-        # Token Pruning 决策
-        if self.cumulative_token_score is None:
-            self.cumulative_token_score = current_token_importance
+        if self.graph_capture_mode:
+            self.next_active_head_indices = None
+            self.next_active_token_indices = None
+            self.cumulative_token_score = None
+            self.stage_token_score_accum = None
+            self.stage_token_score_count = 0
+            self.stage_token_weight_total = 0.0
         else:
-            self.cumulative_token_score += current_token_importance
+            if op:
+                current_token_importance = attention_probs.sum(dim=(1, 2))
 
-        next_token_indices = None
-        token_prune_active = (
-            self.enable_token_prune
-            and self.layer_idx >= self.token_prune_start_layer
-            and ((self.layer_idx - self.token_prune_start_layer) % max(1, self.token_prune_interval) == 0)
-        )
-        if token_prune_active and seq_len > self.token_prune_num and self.token_prune_num == 1 and self.cumulative_token_score.size(0) == 1:
-            drop_idx = torch.argmin(self.cumulative_token_score[0])
-            keep_mask = torch.ones(seq_len, device=device, dtype=torch.bool)
-            keep_mask[drop_idx] = False
-            next_token_indices = torch.arange(seq_len, device=device).unsqueeze(0)[:, keep_mask]
-        elif token_prune_active and seq_len > self.token_prune_num:
-            keep_k_tokens = max(1, seq_len - self.token_prune_num)
-            _, topk_token_indices = torch.topk(self.cumulative_token_score, k=keep_k_tokens, dim=1)
-            # 保持 Token 的原有句子的顺序
-            next_token_indices = torch.sort(topk_token_indices, dim=1).values
+            # Head Pruning 决策
+            importance_dims = (0, 2, 3) if context_layer.dim() == 4 else (1, 2)
+            head_importance = context_layer.abs().mean(dim=importance_dims)
+            next_head_indices = active_head_indices
+
+            head_prune_active = (
+                self.enable_head_prune
+                and self.layer_idx >= self.head_prune_start_layer
+                and ((self.layer_idx - self.head_prune_start_layer) % max(1, self.head_prune_interval) == 0)
+            )
+            if head_prune_active and cur_heads > self.head_prune_num:
+                if self.head_prune_num == 1:
+                    drop_idx = torch.argmin(head_importance)
+                    keep_mask = torch.ones(cur_heads, device=device, dtype=torch.bool)
+                    keep_mask[drop_idx] = False
+                    next_head_indices = active_head_indices[keep_mask]
+                else:
+                    keep_k = max(1, cur_heads - self.head_prune_num) # Ensure at least 1 head remains
+                    _, topk_indices = torch.topk(head_importance, k=keep_k)
+                    next_head_indices = active_head_indices[topk_indices]
+                    next_head_indices = torch.sort(next_head_indices).values
             
-        self.next_active_token_indices = next_token_indices # Store for next layer to use
+            self.next_active_head_indices = next_head_indices
+
+            # Token Pruning 决策
+            if self.enable_token_stage_pruning:
+                stage_pos = ((self.layer_idx - self.token_prune_start_layer) % max(1, self.token_stage_size)) + 1
+                if self.token_stage_weighting == "linear":
+                    stage_weight = float(stage_pos)
+                else:
+                    stage_weight = 1.0
+                if self.stage_token_score_accum is None:
+                    self.stage_token_score_accum = current_token_importance * stage_weight
+                    self.stage_token_score_count = 1
+                    self.stage_token_weight_total = stage_weight
+                else:
+                    self.stage_token_score_accum = self.stage_token_score_accum + current_token_importance * stage_weight
+                    self.stage_token_score_count += 1
+                    self.stage_token_weight_total += stage_weight
+                token_score_for_prune = self.stage_token_score_accum / max(1.0, self.stage_token_weight_total)
+                token_stage_boundary = (
+                    self.layer_idx >= self.token_prune_start_layer
+                    and ((self.layer_idx - self.token_prune_start_layer + 1) % max(1, self.token_stage_size) == 0)
+                )
+                self.cumulative_token_score = token_score_for_prune
+            else:
+                if self.cumulative_token_score is None:
+                    self.cumulative_token_score = current_token_importance
+                else:
+                    self.cumulative_token_score += current_token_importance
+                token_score_for_prune = self.cumulative_token_score
+                token_stage_boundary = True
+
+            next_token_indices = None
+            token_prune_active = (
+                self.enable_token_prune
+                and self.layer_idx >= self.token_prune_start_layer
+                and ((self.layer_idx - self.token_prune_start_layer) % max(1, self.token_prune_interval) == 0)
+                and token_stage_boundary
+            )
+            if token_prune_active and seq_len > self.token_prune_num and self.token_prune_num == 1 and token_score_for_prune.size(0) == 1:
+                drop_idx = triton_argmin_1d(token_score_for_prune[0])
+                keep_mask = torch.ones(seq_len, device=device, dtype=torch.bool)
+                keep_mask[drop_idx] = False
+                next_token_indices = torch.arange(seq_len, device=device).unsqueeze(0)[:, keep_mask]
+            elif token_prune_active and seq_len > self.token_prune_num:
+                keep_k_tokens = max(1, seq_len - self.token_prune_num)
+                _, topk_token_indices = torch.topk(token_score_for_prune, k=keep_k_tokens, dim=1)
+                # 保持 Token 的原有句子的顺序
+                next_token_indices = torch.sort(topk_token_indices, dim=1).values
+            if token_prune_active and self.enable_token_stage_pruning:
+                self.stage_token_score_accum = None
+                self.stage_token_score_count = 0
+                self.stage_token_weight_total = 0.0
+                self.cumulative_token_score = None
+            
+            self.next_active_token_indices = next_token_indices # Store for next layer to use
 
         # ====================================================================
         # 统一形状处理与输出返回

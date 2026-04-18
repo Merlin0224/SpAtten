@@ -6,13 +6,25 @@ from pathlib import Path
 
 import torch
 
-from benchmark.benchmark_bf16_msb import benchmark_model, reset_spatten_states
-from spattn.spatten_bert_bf16_msb import (
-    SpattenBertSelfAttention,
-    build_inputs_local_or_synthetic,
-    load_bert_model_local_or_synthetic,
-    spatten_encoder_forward,
-)
+try:
+    from benchmark_paper_bf16_msb import benchmark_model, reset_spatten_states
+except ImportError:
+    from benchmark.benchmark_bf16_msb import benchmark_model, reset_spatten_states
+
+try:
+    from spatten_bert_ultimate_paper_bf16_msb import (
+        SpattenBertSelfAttention,
+        build_inputs_local_or_synthetic,
+        load_bert_model_local_or_synthetic,
+        spatten_encoder_forward,
+    )
+except ImportError:
+    from spattn.spatten_bert_bf16_msb import (
+        SpattenBertSelfAttention,
+        build_inputs_local_or_synthetic,
+        load_bert_model_local_or_synthetic,
+        spatten_encoder_forward,
+    )
 from transformers.models.bert.modeling_bert import BertEncoder
 
 
@@ -29,6 +41,13 @@ def configure_spatten_model(
     token_prune_interval=2,
     enable_head_prune=False,
     enable_token_prune=False,
+    enable_delayed_token_compaction=False,
+    token_compact_interval=1,
+    token_compact_min_drop_ratio=1.0,
+    graph_capture_mode=False,
+    enable_token_stage_pruning=False,
+    token_stage_size=1,
+    token_stage_weighting="uniform",
 ):
     spatten_model = copy.deepcopy(base_model)
     for layer_idx, layer in enumerate(spatten_model.encoder.layer):
@@ -52,6 +71,13 @@ def configure_spatten_model(
         new_attn.token_prune_start_layer = token_prune_start_layer
         new_attn.head_prune_interval = head_prune_interval
         new_attn.token_prune_interval = token_prune_interval
+        new_attn.enable_delayed_token_compaction = enable_delayed_token_compaction
+        new_attn.token_compact_interval = token_compact_interval
+        new_attn.token_compact_min_drop_ratio = token_compact_min_drop_ratio
+        new_attn.graph_capture_mode = graph_capture_mode
+        new_attn.enable_token_stage_pruning = enable_token_stage_pruning
+        new_attn.token_stage_size = token_stage_size
+        new_attn.token_stage_weighting = token_stage_weighting
 
         layer.attention.self = new_attn
 
@@ -77,6 +103,12 @@ def run_variant(
     token_prune_interval=2,
     enable_head_prune=False,
     enable_token_prune=False,
+    enable_delayed_token_compaction=False,
+    token_compact_interval=1,
+    token_compact_min_drop_ratio=1.0,
+    enable_token_stage_pruning=False,
+    token_stage_size=1,
+    token_stage_weighting="uniform",
 ):
     if mode == "baseline":
         ms = benchmark_model(base_model, inputs, num_iters=iters, warmup=warmup, reset_state=False)
@@ -98,6 +130,12 @@ def run_variant(
         token_prune_interval=token_prune_interval,
         enable_head_prune=enable_head_prune,
         enable_token_prune=enable_token_prune,
+        enable_delayed_token_compaction=enable_delayed_token_compaction,
+        token_compact_interval=token_compact_interval,
+        token_compact_min_drop_ratio=token_compact_min_drop_ratio,
+        enable_token_stage_pruning=enable_token_stage_pruning,
+        token_stage_size=token_stage_size,
+        token_stage_weighting=token_stage_weighting,
     )
     ms = benchmark_model(spatten_model, inputs, num_iters=iters, warmup=warmup, reset_state=True)
     return {
@@ -137,6 +175,12 @@ def main():
     parser.add_argument("--token-prune-interval", type=int, default=2)
     parser.add_argument("--enable-head-prune", action="store_true")
     parser.add_argument("--enable-token-prune", action="store_true")
+    parser.add_argument("--enable-delayed-token-compaction", action="store_true")
+    parser.add_argument("--token-compact-interval", type=int, default=1)
+    parser.add_argument("--token-compact-min-drop-ratio", type=float, default=1.0)
+    parser.add_argument("--enable-token-stage-pruning", action="store_true")
+    parser.add_argument("--token-stage-size", type=int, default=1)
+    parser.add_argument("--token-stage-weighting", choices=["uniform", "linear"], default="uniform")
     parser.add_argument("--output-dir", default="artifacts/route_b")
     args = parser.parse_args()
 
@@ -173,6 +217,12 @@ def main():
             token_prune_interval=args.token_prune_interval,
             enable_head_prune=args.enable_head_prune,
             enable_token_prune=args.enable_token_prune,
+            enable_delayed_token_compaction=args.enable_delayed_token_compaction,
+            token_compact_interval=args.token_compact_interval,
+            token_compact_min_drop_ratio=args.token_compact_min_drop_ratio,
+            enable_token_stage_pruning=args.enable_token_stage_pruning,
+            token_stage_size=args.token_stage_size,
+            token_stage_weighting=args.token_stage_weighting,
         )
 
     baseline_ms = results["baseline"]["ms"]
@@ -203,6 +253,12 @@ def main():
         "token_prune_interval": args.token_prune_interval,
         "enable_head_prune": args.enable_head_prune,
         "enable_token_prune": args.enable_token_prune,
+        "enable_delayed_token_compaction": args.enable_delayed_token_compaction,
+        "token_compact_interval": args.token_compact_interval,
+        "token_compact_min_drop_ratio": args.token_compact_min_drop_ratio,
+        "enable_token_stage_pruning": args.enable_token_stage_pruning,
+        "token_stage_size": args.token_stage_size,
+        "token_stage_weighting": args.token_stage_weighting,
         "results": results,
         "recommendation": recommendation,
     }
@@ -215,6 +271,14 @@ def main():
     print(f"Seq Len: {args.seq_len}")
     print(f"Head prune enabled: {args.enable_head_prune} (num={args.head_prune_num})")
     print(f"Token prune enabled: {args.enable_token_prune} (num={args.token_prune_num})")
+    print(
+        f"Delayed token compaction: {args.enable_delayed_token_compaction} "
+        f"(interval={args.token_compact_interval}, min_drop_ratio={args.token_compact_min_drop_ratio})"
+    )
+    print(
+        f"Token-only stage pruning: {args.enable_token_stage_pruning} "
+        f"(token_stage_size={args.token_stage_size}, weighting={args.token_stage_weighting})"
+    )
     for mode in ["baseline", "quant_only", "v_prune_only", "full"]:
         item = results[mode]
         print(
@@ -226,4 +290,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

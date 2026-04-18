@@ -1,0 +1,65 @@
+{
+  "timestamp": "20260418_160925",
+  "device": "NVIDIA GeForce RTX 3090",
+  "model_source": "synthetic BertConfig() weights (max_position_embeddings=8194)",
+  "seq_lens": [
+    1024,
+    2048,
+    4096,
+    8192
+  ],
+  "warmup": 10,
+  "iters": 30,
+  "graph_warmup": 3,
+  "compile_mode": "default",
+  "compile_dynamic": false,
+  "spatten_mode": "full",
+  "quant_threshold": 0.01,
+  "v_threshold": 0.05,
+  "results": [
+    {
+      "seq_len": 1024,
+      "input_source": "synthetic exact-length token ids (seq_len=1024)",
+      "eager_ms": 14.482159,
+      "compile_ms": 14.946713,
+      "graph_ms": 14.113656,
+      "spatten_ms": 10.175727,
+      "spatten_graph_ms": 9.958161,
+      "compile_runtime_status": "torch.compile(mode=default, dynamic=False)",
+      "best": "spatten_graph"
+    },
+    {
+      "seq_len": 2048,
+      "input_source": "synthetic exact-length token ids (seq_len=2048)",
+      "eager_ms": 38.759835,
+      "compile_ms": 38.837248,
+      "graph_ms": 38.650232,
+      "spatten_ms": 24.192716,
+      "spatten_graph_ms": 24.045807,
+      "compile_runtime_status": "torch.compile(mode=default, dynamic=False)",
+      "best": "spatten_graph"
+    },
+    {
+      "seq_len": 4096,
+      "input_source": "synthetic exact-length token ids (seq_len=4096)",
+      "eager_ms": 111.95481,
+      "compile_ms": 111.859847,
+      "graph_ms": 112.039323,
+      "spatten_ms": 53.555339,
+      "spatten_graph_ms": 53.37607,
+      "compile_runtime_status": "torch.compile(mode=default, dynamic=False)",
+      "best": "spatten_graph"
+    },
+    {
+      "seq_len": 8192,
+      "input_source": "synthetic exact-length token ids (seq_len=8192)",
+      "eager_ms": 403.15599,
+      "compile_ms": 403.309505,
+      "graph_ms": 403.934863,
+      "spatten_ms": 140.420133,
+      "spatten_graph_ms": 140.109928,
+      "compile_runtime_status": "torch.compile(mode=default, dynamic=False)",
+      "best": "spatten_graph"
+    }
+  ]
+}

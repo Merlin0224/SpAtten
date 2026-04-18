@@ -1,0 +1,137 @@
+{
+  "timestamp": "20260413_165011",
+  "device": "NVIDIA GeForce RTX 3090",
+  "model_source": "synthetic BertConfig() weights (max_position_embeddings=8194)",
+  "seq_lens": [
+    1024,
+    2048,
+    4096,
+    8192
+  ],
+  "warmup": 10,
+  "iters": 30,
+  "token_prune_num": 1,
+  "head_prune_num": 1,
+  "quant_threshold": 0.01,
+  "v_threshold": 0.05,
+  "head_prune_start_layer": 0,
+  "token_prune_start_layer": 0,
+  "head_prune_interval": 1,
+  "token_prune_interval": 2,
+  "enable_head_prune": true,
+  "enable_token_prune": true,
+  "results": [
+    {
+      "seq_len": 1024,
+      "input_source": "synthetic exact-length token ids (seq_len=1024)",
+      "results": {
+        "baseline": {
+          "ms": 18.095787,
+          "mode": "baseline",
+          "slowdown_vs_baseline": 1.0
+        },
+        "quant_only": {
+          "ms": 19.642641,
+          "mode": "quant_only",
+          "slowdown_vs_baseline": 1.085481
+        },
+        "v_prune_only": {
+          "ms": 20.323533,
+          "mode": "v_prune_only",
+          "slowdown_vs_baseline": 1.123109
+        },
+        "full": {
+          "ms": 19.655782,
+          "mode": "full",
+          "slowdown_vs_baseline": 1.086208
+        }
+      },
+      "best_variant": "quant_only",
+      "recommendation": "Quant-only is the fastest end-to-end SpAtten variant; next step should keep focusing on the BF16-MSB progressive quantization path."
+    },
+    {
+      "seq_len": 2048,
+      "input_source": "synthetic exact-length token ids (seq_len=2048)",
+      "results": {
+        "baseline": {
+          "ms": 45.561991,
+          "mode": "baseline",
+          "slowdown_vs_baseline": 1.0
+        },
+        "quant_only": {
+          "ms": 32.518894,
+          "mode": "quant_only",
+          "slowdown_vs_baseline": 0.713729
+        },
+        "v_prune_only": {
+          "ms": 31.026654,
+          "mode": "v_prune_only",
+          "slowdown_vs_baseline": 0.680977
+        },
+        "full": {
+          "ms": 31.280332,
+          "mode": "full",
+          "slowdown_vs_baseline": 0.686544
+        }
+      },
+      "best_variant": "v_prune_only",
+      "recommendation": "V-prune-only is the fastest end-to-end SpAtten variant; next step should simplify the fused path so it inherits the standalone V-prune gains."
+    },
+    {
+      "seq_len": 4096,
+      "input_source": "synthetic exact-length token ids (seq_len=4096)",
+      "results": {
+        "baseline": {
+          "ms": 126.039315,
+          "mode": "baseline",
+          "slowdown_vs_baseline": 1.0
+        },
+        "quant_only": {
+          "ms": 64.337919,
+          "mode": "quant_only",
+          "slowdown_vs_baseline": 0.510459
+        },
+        "v_prune_only": {
+          "ms": 62.088603,
+          "mode": "v_prune_only",
+          "slowdown_vs_baseline": 0.492613
+        },
+        "full": {
+          "ms": 61.547009,
+          "mode": "full",
+          "slowdown_vs_baseline": 0.488316
+        }
+      },
+      "best_variant": "full",
+      "recommendation": "Full end-to-end path is the fastest SpAtten variant; next step should target the fused kernel plus Python scheduling overhead together."
+    },
+    {
+      "seq_len": 8192,
+      "input_source": "synthetic exact-length token ids (seq_len=8192)",
+      "results": {
+        "baseline": {
+          "ms": 433.101139,
+          "mode": "baseline",
+          "slowdown_vs_baseline": 1.0
+        },
+        "quant_only": {
+          "ms": 153.756429,
+          "mode": "quant_only",
+          "slowdown_vs_baseline": 0.355013
+        },
+        "v_prune_only": {
+          "ms": 145.603581,
+          "mode": "v_prune_only",
+          "slowdown_vs_baseline": 0.336188
+        },
+        "full": {
+          "ms": 139.252051,
+          "mode": "full",
+          "slowdown_vs_baseline": 0.321523
+        }
+      },
+      "best_variant": "full",
+      "recommendation": "Full end-to-end path is the fastest SpAtten variant; next step should target the fused kernel plus Python scheduling overhead together."
+    }
+  ]
+}

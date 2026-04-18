@@ -1,0 +1,78 @@
+{
+  "timestamp": "20260418_164507",
+  "device": "NVIDIA GeForce RTX 3090",
+  "model_source": "synthetic BertConfig() weights (max_position_embeddings=8194)",
+  "seq_lens": [
+    1024,
+    2048,
+    4096,
+    8192
+  ],
+  "warmup": 10,
+  "iters": 30,
+  "graph_warmup": 3,
+  "compile_mode": "default",
+  "compile_dynamic": false,
+  "spatten_mode": "full",
+  "token_prune_num": 1,
+  "head_prune_num": 1,
+  "quant_threshold": 0.01,
+  "v_threshold": 0.05,
+  "head_prune_start_layer": 0,
+  "token_prune_start_layer": 0,
+  "head_prune_interval": 1,
+  "token_prune_interval": 2,
+  "enable_delayed_token_compaction": false,
+  "token_compact_interval": 1,
+  "token_compact_min_drop_ratio": 1.0,
+  "results": [
+    {
+      "seq_len": 1024,
+      "input_source": "synthetic exact-length token ids (seq_len=1024)",
+      "eager_ms": 14.85312,
+      "compile_ms": 15.200426,
+      "graph_ms": 14.34129,
+      "spatten_static_ms": 10.387797,
+      "spatten_graph_ms": 10.095753,
+      "spatten_prune_ms": 19.203038,
+      "compile_runtime_status": "torch.compile(mode=default, dynamic=False)",
+      "best": "spatten_graph"
+    },
+    {
+      "seq_len": 2048,
+      "input_source": "synthetic exact-length token ids (seq_len=2048)",
+      "eager_ms": 39.287227,
+      "compile_ms": 39.389425,
+      "graph_ms": 39.180322,
+      "spatten_static_ms": 24.485649,
+      "spatten_graph_ms": 24.182579,
+      "spatten_prune_ms": 24.845209,
+      "compile_runtime_status": "torch.compile(mode=default, dynamic=False)",
+      "best": "spatten_graph"
+    },
+    {
+      "seq_len": 4096,
+      "input_source": "synthetic exact-length token ids (seq_len=4096)",
+      "eager_ms": 112.392293,
+      "compile_ms": 112.065267,
+      "graph_ms": 112.415747,
+      "spatten_static_ms": 53.874109,
+      "spatten_graph_ms": 53.600256,
+      "spatten_prune_ms": 47.159741,
+      "compile_runtime_status": "torch.compile(mode=default, dynamic=False)",
+      "best": "spatten_prune"
+    },
+    {
+      "seq_len": 8192,
+      "input_source": "synthetic exact-length token ids (seq_len=8192)",
+      "eager_ms": 405.168197,
+      "compile_ms": 404.36582,
+      "graph_ms": 405.208171,
+      "spatten_static_ms": 141.154232,
+      "spatten_graph_ms": 140.817757,
+      "spatten_prune_ms": 106.686157,
+      "compile_runtime_status": "torch.compile(mode=default, dynamic=False)",
+      "best": "spatten_prune"
+    }
+  ]
+}

@@ -5,15 +5,8 @@ from pathlib import Path
 
 import torch
 
-try:
-    from route_b_model_ablation_paper_bf16_msb import recommend, run_variant
-except ImportError:
-    from bench_kernel.model_ablation_bf16_msb import recommend, run_variant
-
-try:
-    from spatten_bert_ultimate_paper_bf16_msb import build_inputs_local_or_synthetic, load_bert_model_local_or_synthetic
-except ImportError:
-    from spattn.spatten_bert_bf16_msb import build_inputs_local_or_synthetic, load_bert_model_local_or_synthetic
+from route_b_model_ablation import recommend, run_variant
+from spatten_bert_ultimate import build_inputs_local_or_synthetic, load_bert_model_local_or_synthetic
 
 
 def parse_int_list(raw_value):
@@ -21,32 +14,20 @@ def parse_int_list(raw_value):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Route-B paper BF16-MSB model-level sequence-length ablation benchmark.")
+    parser = argparse.ArgumentParser(description="Route-B model-level sequence-length ablation benchmark.")
     parser.add_argument("--seq-lens", default="128,256,512,1024,2048,4096")
     parser.add_argument("--warmup", type=int, default=10)
     parser.add_argument("--iters", type=int, default=30)
     parser.add_argument("--token-prune-num", type=int, default=1)
     parser.add_argument("--head-prune-num", type=int, default=1)
-    parser.add_argument("--quant-threshold", type=float, default=0.01)
-    parser.add_argument("--v-threshold", type=float, default=0.05)
-    parser.add_argument("--head-prune-start-layer", type=int, default=0)
-    parser.add_argument("--token-prune-start-layer", type=int, default=0)
-    parser.add_argument("--head-prune-interval", type=int, default=1)
-    parser.add_argument("--token-prune-interval", type=int, default=2)
     parser.add_argument("--enable-head-prune", action="store_true")
     parser.add_argument("--enable-token-prune", action="store_true")
-    parser.add_argument("--enable-delayed-token-compaction", action="store_true")
-    parser.add_argument("--token-compact-interval", type=int, default=1)
-    parser.add_argument("--token-compact-min-drop-ratio", type=float, default=1.0)
-    parser.add_argument("--enable-token-stage-pruning", action="store_true")
-    parser.add_argument("--token-stage-size", type=int, default=1)
-    parser.add_argument("--token-stage-weighting", choices=["uniform", "linear"], default="uniform")
     parser.add_argument("--output-dir", default="artifacts/route_b")
     args = parser.parse_args()
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     if device != "cuda":
-        raise RuntimeError("CUDA is required for route_b_model_seq_ablation_paper_bf16_msb.py")
+        raise RuntimeError("CUDA is required for route_b_model_seq_ablation.py")
 
     seq_lens = parse_int_list(args.seq_lens)
     base_model, model_source = load_bert_model_local_or_synthetic(
@@ -55,19 +36,11 @@ def main():
     )
 
     all_results = []
-    print("Route-B Model Seq Ablation (Paper BF16-MSB)")
+    print("Route-B Model Seq Ablation")
     print(f"Device: {torch.cuda.get_device_name(0)}")
     print(f"Model source: {model_source}")
     print(f"Head prune enabled: {args.enable_head_prune} (num={args.head_prune_num})")
     print(f"Token prune enabled: {args.enable_token_prune} (num={args.token_prune_num})")
-    print(
-        f"Delayed token compaction: {args.enable_delayed_token_compaction} "
-        f"(interval={args.token_compact_interval}, min_drop_ratio={args.token_compact_min_drop_ratio})"
-    )
-    print(
-        f"Token-only stage pruning: {args.enable_token_stage_pruning} "
-        f"(token_stage_size={args.token_stage_size}, weighting={args.token_stage_weighting})"
-    )
     print(f"{'Seq Len':<8} | {'Baseline':<10} | {'Quant':<10} | {'V-Prune':<10} | {'Full':<10} | {'Best Variant':<12}")
     print("-" * 78)
 
@@ -88,20 +61,8 @@ def main():
                 args.head_prune_num,
                 args.warmup,
                 args.iters,
-                quant_threshold=args.quant_threshold,
-                v_threshold=args.v_threshold,
-                head_prune_start_layer=args.head_prune_start_layer,
-                token_prune_start_layer=args.token_prune_start_layer,
-                head_prune_interval=args.head_prune_interval,
-                token_prune_interval=args.token_prune_interval,
                 enable_head_prune=args.enable_head_prune,
                 enable_token_prune=args.enable_token_prune,
-                enable_delayed_token_compaction=args.enable_delayed_token_compaction,
-                token_compact_interval=args.token_compact_interval,
-                token_compact_min_drop_ratio=args.token_compact_min_drop_ratio,
-                enable_token_stage_pruning=args.enable_token_stage_pruning,
-                token_stage_size=args.token_stage_size,
-                token_stage_weighting=args.token_stage_weighting,
             )
 
         baseline_ms = results["baseline"]["ms"]
@@ -146,20 +107,8 @@ def main():
         "iters": args.iters,
         "token_prune_num": args.token_prune_num,
         "head_prune_num": args.head_prune_num,
-        "quant_threshold": args.quant_threshold,
-        "v_threshold": args.v_threshold,
-        "head_prune_start_layer": args.head_prune_start_layer,
-        "token_prune_start_layer": args.token_prune_start_layer,
-        "head_prune_interval": args.head_prune_interval,
-        "token_prune_interval": args.token_prune_interval,
         "enable_head_prune": args.enable_head_prune,
         "enable_token_prune": args.enable_token_prune,
-        "enable_delayed_token_compaction": args.enable_delayed_token_compaction,
-        "token_compact_interval": args.token_compact_interval,
-        "token_compact_min_drop_ratio": args.token_compact_min_drop_ratio,
-        "enable_token_stage_pruning": args.enable_token_stage_pruning,
-        "token_stage_size": args.token_stage_size,
-        "token_stage_weighting": args.token_stage_weighting,
         "results": all_results,
     }
     output_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")

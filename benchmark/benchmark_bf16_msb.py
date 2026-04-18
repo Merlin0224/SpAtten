@@ -2,12 +2,22 @@ import torch
 import time
 import logging
 import copy
-from spattn.spatten_bert_bf16_msb import (
-    SpattenBertSelfAttention,
-    build_inputs_local_or_synthetic,
-    load_bert_model_local_or_synthetic,
-    spatten_encoder_forward,
-)
+import torch.nn as nn
+
+try:
+    from spatten_bert_ultimate_paper_bf16_msb import (
+        SpattenBertSelfAttention,
+        build_inputs_local_or_synthetic,
+        load_bert_model_local_or_synthetic,
+        spatten_encoder_forward,
+    )
+except ImportError:
+    from spattn.spatten_bert_bf16_msb import (
+        SpattenBertSelfAttention,
+        build_inputs_local_or_synthetic,
+        load_bert_model_local_or_synthetic,
+        spatten_encoder_forward,
+    )
 from transformers.models.bert.modeling_bert import BertEncoder
 
 # 配置日志保存
@@ -29,6 +39,94 @@ def reset_spatten_states(model):
             attn.next_active_head_indices = None
             attn.next_active_token_indices = None
             attn.active_head_indices_for_this_layer = None
+            if hasattr(attn, "current_active_head_indices"):
+                attn.current_active_head_indices = None
+            if hasattr(attn, "stage_token_score_accum"):
+                attn.stage_token_score_accum = None
+            if hasattr(attn, "stage_token_score_count"):
+                attn.stage_token_score_count = 0
+            if hasattr(attn, "stage_token_weight_total"):
+                attn.stage_token_weight_total = 0.0
+
+
+def clone_inputs(inputs):
+    return {name: tensor.clone() for name, tensor in inputs.items()}
+
+
+class KwargsModelWrapper(nn.Module):
+    def __init__(self, model):
+        super().__init__()
+        self.model = model
+
+    def forward(self, input_ids, attention_mask, token_type_ids=None):
+        kwargs = {
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
+        }
+        if token_type_ids is not None:
+            kwargs["token_type_ids"] = token_type_ids
+        outputs = self.model(**kwargs)
+        if hasattr(outputs, "last_hidden_state"):
+            return outputs.last_hidden_state
+        return outputs
+
+
+class CUDAGraphRunner:
+    def __init__(self, model, sample_inputs, warmup=3, reset_state_fn=None):
+        if not torch.cuda.is_available():
+            raise RuntimeError("CUDAGraphRunner requires CUDA")
+
+        self.model = model.eval()
+        self.reset_state_fn = reset_state_fn
+        self.static_inputs = {name: tensor.clone() for name, tensor in sample_inputs.items()}
+        self.output = None
+        self.graph = torch.cuda.CUDAGraph()
+
+        warmup_stream = torch.cuda.Stream()
+        warmup_stream.wait_stream(torch.cuda.current_stream())
+        with torch.cuda.stream(warmup_stream):
+            for _ in range(warmup):
+                if self.reset_state_fn is not None:
+                    self.reset_state_fn(self.model)
+                self.output = self.model(**self.static_inputs)
+        torch.cuda.current_stream().wait_stream(warmup_stream)
+        torch.cuda.synchronize()
+
+        if self.reset_state_fn is not None:
+            self.reset_state_fn(self.model)
+        with torch.cuda.graph(self.graph):
+            self.output = self.model(**self.static_inputs)
+
+    def replay(self, new_inputs=None):
+        if new_inputs is not None:
+            for name, tensor in new_inputs.items():
+                self.static_inputs[name].copy_(tensor)
+        self.graph.replay()
+        return self.output
+
+
+def benchmark_cudagraph_model(model, inputs, num_iters=100, warmup=10, reset_state=False, graph_warmup=3):
+    model.eval()
+    wrapped = KwargsModelWrapper(model).to(next(model.parameters()).device).eval()
+    runner = CUDAGraphRunner(
+        wrapped,
+        clone_inputs(inputs),
+        warmup=graph_warmup,
+        reset_state_fn=(lambda _: reset_spatten_states(model)) if reset_state else None,
+    )
+
+    for _ in range(warmup):
+        runner.replay(inputs)
+    torch.cuda.synchronize()
+
+    start_event = torch.cuda.Event(enable_timing=True)
+    end_event = torch.cuda.Event(enable_timing=True)
+    start_event.record()
+    for _ in range(num_iters):
+        runner.replay(inputs)
+    end_event.record()
+    torch.cuda.synchronize()
+    return start_event.elapsed_time(end_event) / num_iters
 
 
 def benchmark_model(model, inputs, num_iters=100, warmup=10, reset_state=False):
