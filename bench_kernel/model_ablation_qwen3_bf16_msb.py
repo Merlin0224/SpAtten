@@ -29,6 +29,10 @@ def run_variant(
     token_prune_num=1,
     token_prune_start_layer=0,
     token_prune_interval=1,
+    token_block_size=0,
+    token_recent_keep=128,
+    token_prefix_keep=1,
+    enable_triton_autotune=False,
 ):
     if mode == "baseline":
         ms = benchmark_model(base_model, inputs, num_iters=iters, warmup=warmup, reset_state=False)
@@ -47,6 +51,10 @@ def run_variant(
         token_prune_num=token_prune_num,
         token_prune_start_layer=token_prune_start_layer,
         token_prune_interval=token_prune_interval,
+        token_block_size=token_block_size,
+        token_recent_keep=token_recent_keep,
+        token_prefix_keep=token_prefix_keep,
+        enable_triton_autotune=enable_triton_autotune,
     )
     ms = benchmark_model(
         model,
@@ -87,6 +95,10 @@ def main():
     parser.add_argument("--token-prune-num", type=int, default=1)
     parser.add_argument("--token-prune-start-layer", type=int, default=0)
     parser.add_argument("--token-prune-interval", type=int, default=1)
+    parser.add_argument("--token-block-size", type=int, default=0)
+    parser.add_argument("--token-recent-keep", type=int, default=128)
+    parser.add_argument("--token-prefix-keep", type=int, default=1)
+    parser.add_argument("--enable-triton-autotune", action="store_true")
     parser.add_argument("--model-name", default="Qwen/Qwen3-0.6B")
     parser.add_argument("--allow-local-pretrained", action="store_true")
     parser.add_argument("--output-dir", default="artifacts/route_b")
@@ -128,6 +140,10 @@ def main():
             token_prune_num=args.token_prune_num,
             token_prune_start_layer=args.token_prune_start_layer,
             token_prune_interval=args.token_prune_interval,
+            token_block_size=args.token_block_size,
+            token_recent_keep=args.token_recent_keep,
+            token_prefix_keep=args.token_prefix_keep,
+            enable_triton_autotune=args.enable_triton_autotune,
         )
 
     baseline_ms = results["baseline"]["ms"]
@@ -158,6 +174,10 @@ def main():
         "token_prune_num": args.token_prune_num,
         "token_prune_start_layer": args.token_prune_start_layer,
         "token_prune_interval": args.token_prune_interval,
+        "token_block_size": args.token_block_size,
+        "token_recent_keep": args.token_recent_keep,
+        "token_prefix_keep": args.token_prefix_keep,
+        "enable_triton_autotune": args.enable_triton_autotune,
         "results": results,
         "recommendation": recommendation,
     }
@@ -170,6 +190,10 @@ def main():
     print(f"Seq Len: {args.seq_len}")
     print(f"Head prune enabled: {args.enable_head_prune} (num={args.head_prune_num})")
     print(f"Token prune enabled: {args.enable_token_prune} (num={args.token_prune_num})")
+    print(f"Token block size: {args.token_block_size}")
+    print(f"Token recent keep: {args.token_recent_keep}")
+    print(f"Token prefix keep: {args.token_prefix_keep}")
+    print(f"Triton autotune enabled: {args.enable_triton_autotune}")
     for mode in ["baseline", "quant_only", "v_prune_only", "full"]:
         item = results[mode]
         print(f"{mode}: ms={item['ms']:.4f} | slowdown_vs_baseline={item['slowdown_vs_baseline']:.3f}x")

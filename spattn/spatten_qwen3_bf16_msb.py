@@ -43,6 +43,67 @@ TRITON_META_DEFAULTS = {
     },
 }
 
+
+def _make_triton_configs_qk(config_specs):
+    return [
+        triton.Config(
+            {
+                "BLOCK_M": spec["BLOCK_M"],
+                "BLOCK_N": spec["BLOCK_N"],
+            },
+            num_warps=spec["num_warps"],
+            num_stages=spec["num_stages"],
+        )
+        for spec in config_specs
+    ]
+
+
+def _make_triton_configs_v(config_specs):
+    return [
+        triton.Config(
+            {
+                "BLOCK_M": spec["BLOCK_M"],
+                "BLOCK_N": spec["BLOCK_N"],
+                "BLOCK_D": spec.get("BLOCK_D", 64),
+            },
+            num_warps=spec["num_warps"],
+            num_stages=spec["num_stages"],
+        )
+        for spec in config_specs
+    ]
+
+
+QWEN3_AUTOTUNE_CONFIGS = {
+    "progressive_qk": _make_triton_configs_qk(
+        [
+            {"BLOCK_M": 32, "BLOCK_N": 32, "num_warps": 4, "num_stages": 1},
+            {"BLOCK_M": 32, "BLOCK_N": 64, "num_warps": 4, "num_stages": 1},
+            {"BLOCK_M": 64, "BLOCK_N": 32, "num_warps": 4, "num_stages": 1},
+            {"BLOCK_M": 64, "BLOCK_N": 64, "num_warps": 4, "num_stages": 2},
+            {"BLOCK_M": 32, "BLOCK_N": 64, "num_warps": 8, "num_stages": 2},
+        ]
+    ),
+    "v_prune": _make_triton_configs_v(
+        [
+            {"BLOCK_M": 32, "BLOCK_N": 32, "num_warps": 4, "num_stages": 2},
+            {"BLOCK_M": 32, "BLOCK_N": 64, "num_warps": 4, "num_stages": 2},
+            {"BLOCK_M": 64, "BLOCK_N": 32, "num_warps": 4, "num_stages": 2},
+            {"BLOCK_M": 64, "BLOCK_N": 64, "num_warps": 4, "num_stages": 2},
+            {"BLOCK_M": 32, "BLOCK_N": 64, "num_warps": 8, "num_stages": 2},
+        ]
+    ),
+    "ultimate": _make_triton_configs_qk(
+        [
+            {"BLOCK_M": 32, "BLOCK_N": 32, "num_warps": 4, "num_stages": 2},
+            {"BLOCK_M": 32, "BLOCK_N": 64, "num_warps": 4, "num_stages": 2},
+            {"BLOCK_M": 64, "BLOCK_N": 32, "num_warps": 4, "num_stages": 2},
+            {"BLOCK_M": 64, "BLOCK_N": 64, "num_warps": 4, "num_stages": 2},
+            {"BLOCK_M": 32, "BLOCK_N": 64, "num_warps": 8, "num_stages": 2},
+            {"BLOCK_M": 64, "BLOCK_N": 64, "num_warps": 4, "num_stages": 1},
+        ]
+    ),
+}
+
 def _resolve_triton_meta(path_name, meta=None):
     config = dict(TRITON_META_DEFAULTS[path_name])
     if meta is None:
@@ -199,8 +260,185 @@ def _progressive_qk_causal_kernel(
     tl.store(out_ptrs, acc.to(Out.type.element_ty), mask=offs_m[:, None] < N_CTX_Q)
 
 
+@triton.autotune(
+    configs=QWEN3_AUTOTUNE_CONFIGS["progressive_qk"],
+    key=["N_CTX_Q", "N_CTX_K"],
+)
+@triton.jit
+def _progressive_qk_causal_autotuned_kernel(
+    Q, K_MSB, K_LSB, V, Out,
+    stride_qz, stride_qh, stride_qm, stride_qk,
+    stride_kz, stride_kh, stride_kn, stride_kk,
+    stride_vz, stride_vh, stride_vn, stride_vk,
+    stride_oz, stride_oh, stride_om, stride_ok,
+    Z, H, N_CTX_Q, N_CTX_K,
+    sm_scale, threshold,
+    BLOCK_M: tl.constexpr,
+    BLOCK_N: tl.constexpr,
+    d_model: tl.constexpr,
+):
+    start_m = tl.program_id(0)
+    off_hz = tl.program_id(1)
+
+    off_b = off_hz // H
+    off_h = off_hz % H
+
+    q_base = Q + off_b * stride_qz + off_h * stride_qh
+    k_msb_base = K_MSB + off_b * stride_kz + off_h * stride_kh
+    k_lsb_base = K_LSB + off_b * stride_kz + off_h * stride_kh
+    v_base = V + off_b * stride_vz + off_h * stride_vh
+    out_base = Out + off_b * stride_oz + off_h * stride_oh
+
+    offs_m = start_m * BLOCK_M + tl.arange(0, BLOCK_M)
+    offs_n = tl.arange(0, BLOCK_N)
+    offs_d = tl.arange(0, d_model)
+
+    q_ptrs = q_base + offs_m[:, None] * stride_qm + offs_d[None, :] * stride_qk
+    qi = tl.load(q_ptrs, mask=offs_m[:, None] < N_CTX_Q, other=0.0)
+    neg_inf = -1.0e6
+
+    m_i = tl.zeros([BLOCK_M], dtype=tl.float32) - float("inf")
+    l_i = tl.zeros([BLOCK_M], dtype=tl.float32)
+    acc = tl.zeros([BLOCK_M, d_model], dtype=tl.float32)
+
+    max_q = start_m * BLOCK_M + BLOCK_M - 1
+
+    for j in range(0, tl.cdiv(N_CTX_K, BLOCK_N)):
+        cur_n = j * BLOCK_N
+        if cur_n <= max_q:
+            offs_n_curr = cur_n + offs_n
+            valid = (offs_n_curr[None, :] <= offs_m[:, None]) & (offs_n_curr[None, :] < N_CTX_K) & (
+                offs_m[:, None] < N_CTX_Q
+            )
+            row_has_any = tl.sum(valid.to(tl.int32), axis=1) > 0
+
+            k_msb_ptrs = k_msb_base + offs_n_curr[:, None] * stride_kn + offs_d[None, :] * stride_kk
+            k_msb = tl.load(k_msb_ptrs, mask=offs_n_curr[:, None] < N_CTX_K, other=0.0).to(tl.float32)
+            qk = tl.dot(qi, tl.trans(k_msb)) * sm_scale
+            qk = tl.where(valid, qk, neg_inf)
+
+            max_score = tl.max(qk)
+            if max_score < threshold:
+                k_lsb_ptrs = k_lsb_base + offs_n_curr[:, None] * stride_kn + offs_d[None, :] * stride_kk
+                k_lsb = tl.load(k_lsb_ptrs, mask=offs_n_curr[:, None] < N_CTX_K, other=0.0)
+                qk_lsb = tl.dot(qi, tl.trans(k_lsb)) * sm_scale
+                qk = tl.where(valid, qk + qk_lsb, neg_inf)
+
+            m_ij = tl.max(qk, 1)
+            safe_m_ij = tl.where(row_has_any, m_ij, 0.0)
+            p = tl.where(valid, tl.exp(qk - safe_m_ij[:, None]), 0.0)
+            l_ij = tl.sum(p, 1)
+
+            m_next = tl.where(row_has_any, tl.maximum(m_i, m_ij), m_i)
+            alpha = tl.where(row_has_any, tl.exp(m_i - m_next), 1.0)
+            beta = tl.where(row_has_any, tl.exp(m_ij - m_next), 0.0)
+
+            l_i = l_i * alpha + l_ij * beta
+            acc = acc * alpha[:, None]
+
+            v_ptrs = v_base + offs_n_curr[:, None] * stride_vn + offs_d[None, :] * stride_vk
+            v = tl.load(v_ptrs, mask=offs_n_curr[:, None] < N_CTX_K, other=0.0)
+
+            p_scaled = p * beta[:, None]
+            acc = tl.dot(p_scaled.to(tl.float16), v.to(tl.float16), acc)
+            m_i = m_next
+
+    acc = acc / l_i[:, None]
+    out_ptrs = out_base + offs_m[:, None] * stride_om + offs_d[None, :] * stride_ok
+    tl.store(out_ptrs, acc.to(Out.type.element_ty), mask=offs_m[:, None] < N_CTX_Q)
+
+
 @triton.jit
 def _spatten_v_prune_block_skip_causal_kernel(
+    Q, K, V, Out,
+    stride_qz, stride_qh, stride_qm, stride_qk,
+    stride_kz, stride_kh, stride_kn, stride_kk,
+    stride_vz, stride_vh, stride_vn, stride_vk,
+    stride_oz, stride_oh, stride_om, stride_ok,
+    Z, H, N_CTX_Q, N_CTX_K,
+    sm_scale, v_threshold,
+    BLOCK_M: tl.constexpr,
+    BLOCK_N: tl.constexpr,
+    BLOCK_D: tl.constexpr,
+):
+    start_m = tl.program_id(0)
+    off_hz = tl.program_id(1)
+
+    off_b = off_hz // H
+    off_h = off_hz % H
+
+    q_base = Q + off_b * stride_qz + off_h * stride_qh
+    k_base = K + off_b * stride_kz + off_h * stride_kh
+    v_base = V + off_b * stride_vz + off_h * stride_vh
+    out_base = Out + off_b * stride_oz + off_h * stride_oh
+
+    offs_m = start_m * BLOCK_M + tl.arange(0, BLOCK_M)
+    offs_n = tl.arange(0, BLOCK_N)
+    offs_d = tl.arange(0, BLOCK_D)
+
+    q_ptrs = q_base + offs_m[:, None] * stride_qm + offs_d[None, :] * stride_qk
+    qi = tl.load(q_ptrs, mask=offs_m[:, None] < N_CTX_Q, other=0.0)
+    neg_inf = -1.0e6
+
+    m_i = tl.zeros([BLOCK_M], dtype=tl.float32) - float("inf")
+    l_i = tl.zeros([BLOCK_M], dtype=tl.float32)
+    acc = tl.zeros([BLOCK_M, BLOCK_D], dtype=tl.float32)
+
+    max_q = start_m * BLOCK_M + BLOCK_M - 1
+
+    for j in range(0, tl.cdiv(N_CTX_K, BLOCK_N)):
+        cur_n = j * BLOCK_N
+        if cur_n <= max_q:
+            offs_n_curr = cur_n + offs_n
+            valid = (offs_n_curr[None, :] <= offs_m[:, None]) & (offs_n_curr[None, :] < N_CTX_K) & (
+                offs_m[:, None] < N_CTX_Q
+            )
+            row_has_any = tl.sum(valid.to(tl.int32), axis=1) > 0
+
+            k_ptrs = k_base + offs_n_curr[:, None] * stride_kn + offs_d[None, :] * stride_kk
+            k = tl.load(k_ptrs, mask=offs_n_curr[:, None] < N_CTX_K, other=0.0)
+            qk = tl.dot(qi, tl.trans(k)) * sm_scale
+            qk = tl.where(valid, qk, neg_inf)
+
+            m_ij = tl.max(qk, 1)
+            safe_m_ij = tl.where(row_has_any, m_ij, 0.0)
+            p = tl.where(valid, tl.exp(qk - safe_m_ij[:, None]), 0.0)
+
+            m_next = tl.where(row_has_any, tl.maximum(m_i, m_ij), m_i)
+            alpha = tl.where(row_has_any, tl.exp(m_i - m_next), 1.0)
+            beta = tl.where(row_has_any, tl.exp(m_ij - m_next), 0.0)
+
+            max_p_for_v = tl.max(p, axis=0)
+            l_ij = tl.sum(p, 1)
+            l_i_new = l_i * alpha + l_ij * beta
+            acc_new = acc * alpha[:, None]
+
+            skip_v = tl.max(max_p_for_v) <= v_threshold
+            if skip_v:
+                acc = acc_new
+            else:
+                v_load_mask = max_p_for_v > v_threshold
+                v_mask_2d = v_load_mask[:, None] & (offs_n_curr[:, None] < N_CTX_K)
+                v_ptrs = v_base + offs_n_curr[:, None] * stride_vn + offs_d[None, :] * stride_vk
+                v = tl.load(v_ptrs, mask=v_mask_2d, other=0.0)
+                p_pruned = tl.where(p > v_threshold, p, 0.0)
+                p_scaled = p_pruned * beta[:, None]
+                acc = tl.dot(p_scaled.to(tl.float16), v.to(tl.float16), acc_new)
+
+            l_i = l_i_new
+            m_i = m_next
+
+    acc = acc / l_i[:, None]
+    out_ptrs = out_base + offs_m[:, None] * stride_om + offs_d[None, :] * stride_ok
+    tl.store(out_ptrs, acc.to(Out.type.element_ty), mask=offs_m[:, None] < N_CTX_Q)
+
+
+@triton.autotune(
+    configs=QWEN3_AUTOTUNE_CONFIGS["v_prune"],
+    key=["N_CTX_Q", "N_CTX_K"],
+)
+@triton.jit
+def _spatten_v_prune_block_skip_causal_autotuned_kernel(
     Q, K, V, Out,
     stride_qz, stride_qh, stride_qm, stride_qk,
     stride_kz, stride_kh, stride_kn, stride_kk,
@@ -377,10 +615,121 @@ def _spatten_fused_ultimate_causal_kernel(
     tl.store(out_ptrs, acc.to(Out.type.element_ty), mask=offs_m[:, None] < N_CTX_Q)
 
 
-def triton_progressive_qk_causal(q, k_msb, k_lsb, v, threshold, sm_scale, meta=None):
+@triton.autotune(
+    configs=QWEN3_AUTOTUNE_CONFIGS["ultimate"],
+    key=["N_CTX_Q", "N_CTX_K"],
+)
+@triton.jit
+def _spatten_fused_ultimate_causal_autotuned_kernel(
+    Q, K_MSB, K_LSB, V, Out,
+    stride_qz, stride_qh, stride_qm, stride_qk,
+    stride_kz, stride_kh, stride_kn, stride_kk,
+    stride_vz, stride_vh, stride_vn, stride_vk,
+    stride_oz, stride_oh, stride_om, stride_ok,
+    Z, H, N_CTX_Q, N_CTX_K,
+    sm_scale, quant_threshold, v_threshold,
+    BLOCK_M: tl.constexpr,
+    BLOCK_N: tl.constexpr,
+    d_model: tl.constexpr,
+):
+    start_m = tl.program_id(0)
+    off_hz = tl.program_id(1)
+
+    off_b = off_hz // H
+    off_h = off_hz % H
+
+    q_base = Q + off_b * stride_qz + off_h * stride_qh
+    k_msb_base = K_MSB + off_b * stride_kz + off_h * stride_kh
+    k_lsb_base = K_LSB + off_b * stride_kz + off_h * stride_kh
+    v_base = V + off_b * stride_vz + off_h * stride_vh
+    out_base = Out + off_b * stride_oz + off_h * stride_oh
+
+    offs_m = start_m * BLOCK_M + tl.arange(0, BLOCK_M)
+    offs_n = tl.arange(0, BLOCK_N)
+    offs_d = tl.arange(0, d_model)
+
+    q_ptrs = q_base + offs_m[:, None] * stride_qm + offs_d[None, :] * stride_qk
+    qi = tl.load(q_ptrs, mask=offs_m[:, None] < N_CTX_Q, other=0.0)
+    neg_inf = -1.0e6
+
+    m_i = tl.zeros([BLOCK_M], dtype=tl.float32) - float("inf")
+    l_i = tl.zeros([BLOCK_M], dtype=tl.float32)
+    acc = tl.zeros([BLOCK_M, d_model], dtype=tl.float32)
+
+    max_q = start_m * BLOCK_M + BLOCK_M - 1
+
+    for j in range(0, tl.cdiv(N_CTX_K, BLOCK_N)):
+        cur_n = j * BLOCK_N
+        if cur_n <= max_q:
+            offs_n_curr = cur_n + offs_n
+            valid = (offs_n_curr[None, :] <= offs_m[:, None]) & (offs_n_curr[None, :] < N_CTX_K) & (
+                offs_m[:, None] < N_CTX_Q
+            )
+            row_has_any = tl.sum(valid.to(tl.int32), axis=1) > 0
+
+            k_msb_ptrs = k_msb_base + offs_n_curr[:, None] * stride_kn + offs_d[None, :] * stride_kk
+            k_msb = tl.load(k_msb_ptrs, mask=offs_n_curr[:, None] < N_CTX_K, other=0.0).to(tl.float32)
+            qk = tl.dot(qi, tl.trans(k_msb)) * sm_scale
+            qk = tl.where(valid, qk, neg_inf)
+
+            max_score = tl.max(qk)
+            if max_score < quant_threshold:
+                k_lsb_ptrs = k_lsb_base + offs_n_curr[:, None] * stride_kn + offs_d[None, :] * stride_kk
+                k_lsb = tl.load(k_lsb_ptrs, mask=offs_n_curr[:, None] < N_CTX_K, other=0.0)
+                qk_lsb = tl.dot(qi, tl.trans(k_lsb)) * sm_scale
+                qk = tl.where(valid, qk + qk_lsb, neg_inf)
+
+            m_ij = tl.max(qk, 1)
+            safe_m_ij = tl.where(row_has_any, m_ij, 0.0)
+            p = tl.where(valid, tl.exp(qk - safe_m_ij[:, None]), 0.0)
+
+            m_next = tl.where(row_has_any, tl.maximum(m_i, m_ij), m_i)
+            alpha = tl.where(row_has_any, tl.exp(m_i - m_next), 1.0)
+            beta = tl.where(row_has_any, tl.exp(m_ij - m_next), 0.0)
+
+            max_p_for_v = tl.max(p, axis=0)
+            l_ij = tl.sum(p, 1)
+            l_i_new = l_i * alpha + l_ij * beta
+            acc_new = acc * alpha[:, None]
+
+            skip_v = tl.max(max_p_for_v) <= v_threshold
+            if skip_v:
+                acc = acc_new
+            else:
+                v_load_mask = max_p_for_v > v_threshold
+                v_mask_2d = v_load_mask[:, None] & (offs_n_curr[:, None] < N_CTX_K)
+                v_ptrs = v_base + offs_n_curr[:, None] * stride_vn + offs_d[None, :] * stride_vk
+                v = tl.load(v_ptrs, mask=v_mask_2d, other=0.0)
+                p_pruned = tl.where(p > v_threshold, p, 0.0)
+                p_scaled = p_pruned * beta[:, None]
+                acc = tl.dot(p_scaled.to(tl.float16), v.to(tl.float16), acc_new)
+
+            l_i = l_i_new
+            m_i = m_next
+
+    acc = acc / l_i[:, None]
+    out_ptrs = out_base + offs_m[:, None] * stride_om + offs_d[None, :] * stride_ok
+    tl.store(out_ptrs, acc.to(Out.type.element_ty), mask=offs_m[:, None] < N_CTX_Q)
+
+
+def triton_progressive_qk_causal(q, k_msb, k_lsb, v, threshold, sm_scale, meta=None, use_autotune=False):
     z, h, m, d = q.shape
     _, _, n, _ = k_msb.shape
     out = torch.empty_like(q)
+
+    if use_autotune and meta is None:
+        grid = lambda META: (triton.cdiv(m, META["BLOCK_M"]), z * h)
+        _progressive_qk_causal_autotuned_kernel[grid](
+            q, k_msb, k_lsb, v, out,
+            q.stride(0), q.stride(1), q.stride(2), q.stride(3),
+            k_msb.stride(0), k_msb.stride(1), k_msb.stride(2), k_msb.stride(3),
+            v.stride(0), v.stride(1), v.stride(2), v.stride(3),
+            out.stride(0), out.stride(1), out.stride(2), out.stride(3),
+            z, h, m, n,
+            sm_scale, threshold,
+            d_model=d,
+        )
+        return out
 
     config = _resolve_triton_meta("progressive_qk", meta)
     block_m = config["BLOCK_M"]
@@ -401,10 +750,23 @@ def triton_progressive_qk_causal(q, k_msb, k_lsb, v, threshold, sm_scale, meta=N
     return out
 
 
-def triton_fused_spatten_v_prune_block_skip_causal(q, k, v, v_threshold, sm_scale, meta=None):
+def triton_fused_spatten_v_prune_block_skip_causal(q, k, v, v_threshold, sm_scale, meta=None, use_autotune=False):
     z, h, m, d = q.shape
     _, _, n, _ = k.shape
     out = torch.empty_like(q)
+
+    if use_autotune and meta is None:
+        grid = lambda META: (triton.cdiv(m, META["BLOCK_M"]), z * h)
+        _spatten_v_prune_block_skip_causal_autotuned_kernel[grid](
+            q, k, v, out,
+            q.stride(0), q.stride(1), q.stride(2), q.stride(3),
+            k.stride(0), k.stride(1), k.stride(2), k.stride(3),
+            v.stride(0), v.stride(1), v.stride(2), v.stride(3),
+            out.stride(0), out.stride(1), out.stride(2), out.stride(3),
+            z, h, m, n,
+            sm_scale, v_threshold,
+        )
+        return out
 
     config = _resolve_triton_meta("v_prune", meta)
     block_m = config["BLOCK_M"]
@@ -434,10 +796,25 @@ def triton_fused_spatten_ultimate_causal(
     v_threshold,
     sm_scale,
     meta=None,
+    use_autotune=False,
 ):
     z, h, m, d = q.shape
     _, _, n, _ = k_msb.shape
     out = torch.empty_like(q)
+
+    if use_autotune and meta is None:
+        grid = lambda META: (triton.cdiv(m, META["BLOCK_M"]), z * h)
+        _spatten_fused_ultimate_causal_autotuned_kernel[grid](
+            q, k_msb, k_lsb, v, out,
+            q.stride(0), q.stride(1), q.stride(2), q.stride(3),
+            k_msb.stride(0), k_msb.stride(1), k_msb.stride(2), k_msb.stride(3),
+            v.stride(0), v.stride(1), v.stride(2), v.stride(3),
+            out.stride(0), out.stride(1), out.stride(2), out.stride(3),
+            z, h, m, n,
+            sm_scale, quant_threshold, v_threshold,
+            d_model=d,
+        )
+        return out
 
     config = _resolve_triton_meta("ultimate", meta)
     block_m = config["BLOCK_M"]
@@ -481,6 +858,10 @@ class SpattenQwen3Attention(Qwen3Attention):
         self.progressive_qk_meta = None
         self.v_prune_meta = None
         self.ultimate_meta = None
+        self.enable_triton_autotune = False
+        self.token_block_size = 0
+        self.token_recent_keep = 128
+        self.token_prefix_keep = 1
 
     def forward(
         self,
@@ -528,6 +909,7 @@ class SpattenQwen3Attention(Qwen3Attention):
                 v_threshold=self.v_threshold,
                 sm_scale=self.scaling,
                 meta=self.ultimate_meta,
+                use_autotune=self.enable_triton_autotune,
             )
         elif self.enable_prog_quant:
             k_msb, k_lsb = prepare_progressive_k_bf16_msb(key_states)
@@ -539,6 +921,7 @@ class SpattenQwen3Attention(Qwen3Attention):
                 threshold=self.quant_threshold,
                 sm_scale=self.scaling,
                 meta=self.progressive_qk_meta,
+                use_autotune=self.enable_triton_autotune,
             )
         elif self.enable_v_prune:
             context_layer = triton_fused_spatten_v_prune_block_skip_causal(
@@ -548,6 +931,7 @@ class SpattenQwen3Attention(Qwen3Attention):
                 v_threshold=self.v_threshold,
                 sm_scale=self.scaling,
                 meta=self.v_prune_meta,
+                use_autotune=self.enable_triton_autotune,
             )
         else:
             attn_weights = torch.matmul(query_states, key_states.transpose(2, 3)) * self.scaling
@@ -593,9 +977,61 @@ class SpattenQwen3Attention(Qwen3Attention):
             next_token_indices = None
             seq_len = current_token_importance.size(1)
             if token_prune_active and seq_len > self.token_prune_num:
-                keep_k = max(1, seq_len - self.token_prune_num)
-                _, topk_indices = torch.topk(self.cumulative_token_score, k=keep_k, dim=1)
-                next_token_indices = torch.sort(topk_indices, dim=1).values
+                prefix_keep = min(self.token_prefix_keep, seq_len)
+                remaining_after_prefix = max(0, seq_len - prefix_keep)
+                recent_keep = min(self.token_recent_keep, remaining_after_prefix)
+                candidate_start = prefix_keep
+                candidate_end = seq_len - recent_keep
+
+                prefix_indices = None
+                if prefix_keep > 0:
+                    prefix_indices = torch.arange(prefix_keep, device=hidden_states.device).unsqueeze(0)
+
+                recent_indices = None
+                if recent_keep > 0:
+                    recent_indices = torch.arange(
+                        seq_len - recent_keep,
+                        seq_len,
+                        device=hidden_states.device,
+                    ).unsqueeze(0)
+
+                if candidate_end <= candidate_start:
+                    parts = [part for part in (prefix_indices, recent_indices) if part is not None]
+                    next_token_indices = torch.cat(parts, dim=1) if parts else None
+                elif self.token_block_size and self.token_block_size > 1:
+                    block_size = self.token_block_size
+                    candidate_scores = self.cumulative_token_score[:, candidate_start:candidate_end]
+                    candidate_len = candidate_scores.size(1)
+                    padded = ((candidate_len + block_size - 1) // block_size) * block_size
+                    if padded != candidate_len:
+                        pad_width = padded - candidate_len
+                        padded_scores = torch.nn.functional.pad(
+                            candidate_scores,
+                            (0, pad_width),
+                            value=torch.finfo(self.cumulative_token_score.dtype).max,
+                        )
+                    else:
+                        padded_scores = candidate_scores
+                    num_blocks = padded // block_size
+                    block_scores = padded_scores.view(padded_scores.size(0), num_blocks, block_size).mean(dim=-1)
+                    prune_blocks = min(max(1, self.token_prune_num), max(0, num_blocks - 1))
+                    keep_blocks = max(1, num_blocks - prune_blocks)
+                    _, topk_blocks = torch.topk(block_scores, k=keep_blocks, dim=1, largest=True)
+                    sorted_blocks = torch.sort(topk_blocks, dim=1).values
+                    block_offsets = torch.arange(block_size, device=hidden_states.device).view(1, 1, block_size)
+                    expanded = sorted_blocks.unsqueeze(-1) * block_size + block_offsets + candidate_start
+                    candidate_indices = expanded.view(expanded.size(0), -1)
+                    candidate_indices = candidate_indices[:, candidate_indices[0] < candidate_end]
+                    parts = [part for part in (prefix_indices, candidate_indices, recent_indices) if part is not None]
+                    next_token_indices = torch.cat(parts, dim=1) if parts else None
+                else:
+                    candidate_scores = self.cumulative_token_score[:, candidate_start:candidate_end]
+                    candidate_len = candidate_scores.size(1)
+                    keep_k = max(1, candidate_len - self.token_prune_num)
+                    _, topk_indices = torch.topk(candidate_scores, k=keep_k, dim=1)
+                    candidate_indices = torch.sort(topk_indices + candidate_start, dim=1).values
+                    parts = [part for part in (prefix_indices, candidate_indices, recent_indices) if part is not None]
+                    next_token_indices = torch.cat(parts, dim=1) if parts else None
                 self.cumulative_token_score = None
             self.next_active_token_indices = next_token_indices
 
@@ -626,6 +1062,10 @@ def configure_spatten_qwen3_model(
     token_prune_num=1,
     token_prune_start_layer=0,
     token_prune_interval=1,
+    token_block_size=0,
+    token_recent_keep=128,
+    token_prefix_keep=1,
+    enable_triton_autotune=False,
     meta_overrides=None,
 ):
     model = copy.deepcopy(base_model)
@@ -646,6 +1086,10 @@ def configure_spatten_qwen3_model(
         new_attn.token_prune_num = token_prune_num
         new_attn.token_prune_start_layer = token_prune_start_layer
         new_attn.token_prune_interval = token_prune_interval
+        new_attn.token_block_size = token_block_size
+        new_attn.token_recent_keep = token_recent_keep
+        new_attn.token_prefix_keep = token_prefix_keep
+        new_attn.enable_triton_autotune = enable_triton_autotune
         if meta_overrides:
             new_attn.progressive_qk_meta = meta_overrides.get("progressive_qk")
             new_attn.v_prune_meta = meta_overrides.get("v_prune")

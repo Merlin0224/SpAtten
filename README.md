@@ -1,5 +1,53 @@
 # SpAtten on General GPU
 
+## Qwen3 泛化验证
+
+为了验证方法是否只对 BERT 这类 encoder-only 模型有效，我们额外构建了一个 `Qwen3` 分支，用来测试方法在以下场景下的可行性：
+
+- decoder-only
+- causal attention
+- GQA / repeat_kv
+
+当前 `Qwen3` 分支的核心文件包括：
+
+- `spattn/spatten_qwen3_bf16_msb.py`
+- `bench_kernel/model_ablation_qwen3_bf16_msb.py`
+- `bench_kernel/model_seq_ablation_qwen3_bf16_msb.py`
+
+在 `Qwen3` 上，我们按顺序做了这些尝试：
+
+- 先迁移 attention 主线，验证：
+  - `quant_only`
+  - `v_prune_only`
+  - `full`
+- 再加入最小版 `head pruning`
+- 再加入最小版 `token pruning`
+- 尝试为 `Qwen3 causal + GQA` 单独调整 Triton meta
+- 尝试引入 `Triton autotune`
+- 将逐 token pruning 改成更适合 decoder-only 的形式：
+  - 保留前缀锚点
+  - 保留最近窗口
+  - 只在中间旧上下文上做裁剪
+  - 可选 block-based token pruning
+
+当前可以收敛出的结论是：
+
+- 方法在 `Qwen3` 上是可行的，说明它具有跨模型架构的泛化性。
+- 在 `Qwen3` 上，`quant_only`、`v_prune_only`、`full` 都可以稳定优于 baseline。
+- `head pruning` 在 `Qwen3` 上已经验证有效，可以带来明确收益。
+- `token pruning` 在 decoder-only 上更敏感，目前还没有形成稳定超越。
+- `Triton autotune` 已完成接入，但当前没有证明自己能稳定优于人工调过的主线配置。
+- 更适合 decoder-only 的 block/prefix/recent token pruning 方向已经完成框架验证，但目前仍属于探索性分支。
+
+因此，当前 `Qwen3` 分支最稳的主线可以概括为：
+
+- `progressive quantization`
+- `minimal head pruning`
+
+也就是：
+
+**在 Qwen3 上，最稳的收益来源于量化路径与最小版 head pruning；token pruning 与更复杂的 fused 路径仍需更有针对性的 decoder-only 设计。**
+
 面向长上下文的稀疏注意力加速机制研究项目。当前主线围绕 `BF16-MSB + Full SpAtten` 展开，目标是在通用 GPU 上把逻辑稀疏尽量转化为真实的物理加速。
 
 ## 当前主线
@@ -25,6 +73,7 @@
 
 - `spattn/`
   - 主模型与注意力实现
+  - 包含 `BERT` 主线与 `Qwen3` 最小泛化验证分支
 - `bench_kernel/`
   - 端到端消融、技术对比、阈值和调度实验脚本
 - `benchmark/`
@@ -38,6 +87,10 @@
 
 - 主线实现：
   - `spattn/spatten_bert_bf16_msb.py`
+- `Qwen3` 最小验证分支：
+  - `spattn/spatten_qwen3_bf16_msb.py`
+  - `bench_kernel/model_ablation_qwen3_bf16_msb.py`
+  - `bench_kernel/model_seq_ablation_qwen3_bf16_msb.py`
 - 层间级联逻辑：
   - `module.py`
 - 主线模型级消融：

@@ -1,0 +1,110 @@
+{
+  "timestamp": "20260419_180605",
+  "device": "NVIDIA GeForce RTX 3090",
+  "model_source": "synthetic Qwen3Config() weights (max_position_embeddings=8194)",
+  "seq_lens": [
+    2048,
+    4096,
+    8192
+  ],
+  "warmup": 10,
+  "iters": 30,
+  "quant_threshold": 0.01,
+  "v_threshold": 0.05,
+  "enable_head_prune": true,
+  "head_prune_num": 1,
+  "head_prune_start_layer": 0,
+  "head_prune_interval": 1,
+  "enable_token_prune": true,
+  "token_prune_num": 1,
+  "token_prune_start_layer": 0,
+  "token_prune_interval": 2,
+  "token_block_size": 0,
+  "enable_triton_autotune": true,
+  "results": [
+    {
+      "seq_len": 2048,
+      "input_source": "synthetic exact-length token ids (seq_len=2048)",
+      "results": {
+        "baseline": {
+          "ms": 61.976611,
+          "mode": "baseline",
+          "slowdown_vs_baseline": 1.0
+        },
+        "quant_only": {
+          "ms": 56.492647,
+          "mode": "quant_only",
+          "slowdown_vs_baseline": 0.911516
+        },
+        "v_prune_only": {
+          "ms": 54.493115,
+          "mode": "v_prune_only",
+          "slowdown_vs_baseline": 0.879253
+        },
+        "full": {
+          "ms": 58.216003,
+          "mode": "full",
+          "slowdown_vs_baseline": 0.939322
+        }
+      },
+      "best_variant": "v_prune_only",
+      "recommendation": "V-prune-only is the fastest Qwen3 SpAtten variant; next step should simplify the fused causal path to inherit this gain."
+    },
+    {
+      "seq_len": 4096,
+      "input_source": "synthetic exact-length token ids (seq_len=4096)",
+      "results": {
+        "baseline": {
+          "ms": 151.362288,
+          "mode": "baseline",
+          "slowdown_vs_baseline": 1.0
+        },
+        "quant_only": {
+          "ms": 110.093172,
+          "mode": "quant_only",
+          "slowdown_vs_baseline": 0.727349
+        },
+        "v_prune_only": {
+          "ms": 104.604403,
+          "mode": "v_prune_only",
+          "slowdown_vs_baseline": 0.691086
+        },
+        "full": {
+          "ms": 117.236637,
+          "mode": "full",
+          "slowdown_vs_baseline": 0.774543
+        }
+      },
+      "best_variant": "v_prune_only",
+      "recommendation": "V-prune-only is the fastest Qwen3 SpAtten variant; next step should simplify the fused causal path to inherit this gain."
+    },
+    {
+      "seq_len": 8192,
+      "input_source": "synthetic exact-length token ids (seq_len=8192)",
+      "results": {
+        "baseline": {
+          "ms": 421.880046,
+          "mode": "baseline",
+          "slowdown_vs_baseline": 1.0
+        },
+        "quant_only": {
+          "ms": 233.076286,
+          "mode": "quant_only",
+          "slowdown_vs_baseline": 0.552471
+        },
+        "v_prune_only": {
+          "ms": 215.470557,
+          "mode": "v_prune_only",
+          "slowdown_vs_baseline": 0.510739
+        },
+        "full": {
+          "ms": 263.854248,
+          "mode": "full",
+          "slowdown_vs_baseline": 0.625425
+        }
+      },
+      "best_variant": "v_prune_only",
+      "recommendation": "V-prune-only is the fastest Qwen3 SpAtten variant; next step should simplify the fused causal path to inherit this gain."
+    }
+  ]
+}
