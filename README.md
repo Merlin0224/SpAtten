@@ -213,15 +213,4 @@ pixi run python -m bench_kernel.model_seq_ablation_qwen3_bf16_msb \
   --token-prefix-keep 1
 ```
 
-## Future Directions
 
-后续更值得继续投入的方向包括：
-
-- 更适合 GPU 的动态 `Head/Token` 决策策略
-- 更适合 decoder-only 的 token pruning 设计
-- 更稳定的 `Qwen3 full` 路径优化
-- 稀疏注意力与物理 compaction 的进一步协同
-
-一句话总结：
-
-**本项目已经在通用 GPU 上验证了面向长上下文的稀疏注意力加速机制的可行性，并进一步证明该方法具有跨模型架构的泛化潜力。**
