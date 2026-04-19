@@ -29,24 +29,37 @@ logging.basicConfig(
 )
 
 def reset_spatten_states(model):
-    if not hasattr(model, "encoder"):
+    if hasattr(model, "encoder"):
+        for layer in model.encoder.layer:
+            attn = layer.attention.self
+            if hasattr(attn, "cumulative_token_score"):
+                attn.cumulative_token_score = None
+                attn.next_active_head_indices = None
+                attn.next_active_token_indices = None
+                attn.active_head_indices_for_this_layer = None
+                if hasattr(attn, "current_active_head_indices"):
+                    attn.current_active_head_indices = None
+                if hasattr(attn, "stage_token_score_accum"):
+                    attn.stage_token_score_accum = None
+                if hasattr(attn, "stage_token_score_count"):
+                    attn.stage_token_score_count = 0
+                if hasattr(attn, "stage_token_weight_total"):
+                    attn.stage_token_weight_total = 0.0
         return
 
-    for layer in model.encoder.layer:
-        attn = layer.attention.self
-        if hasattr(attn, "cumulative_token_score"):
-            attn.cumulative_token_score = None
-            attn.next_active_head_indices = None
-            attn.next_active_token_indices = None
-            attn.active_head_indices_for_this_layer = None
-            if hasattr(attn, "current_active_head_indices"):
-                attn.current_active_head_indices = None
-            if hasattr(attn, "stage_token_score_accum"):
-                attn.stage_token_score_accum = None
-            if hasattr(attn, "stage_token_score_count"):
-                attn.stage_token_score_count = 0
-            if hasattr(attn, "stage_token_weight_total"):
-                attn.stage_token_weight_total = 0.0
+    if hasattr(model, "layers"):
+        for layer in model.layers:
+            attn = getattr(layer, "self_attn", None)
+            if attn is None:
+                continue
+            if hasattr(attn, "next_active_head_indices"):
+                attn.next_active_head_indices = None
+            if hasattr(attn, "active_head_indices_for_this_layer"):
+                attn.active_head_indices_for_this_layer = None
+            if hasattr(attn, "cumulative_token_score"):
+                attn.cumulative_token_score = None
+            if hasattr(attn, "next_active_token_indices"):
+                attn.next_active_token_indices = None
 
 
 def clone_inputs(inputs):

@@ -1,0 +1,968 @@
+{
+  "timestamp": "20260418_220655",
+  "device": "NVIDIA GeForce RTX 3090",
+  "model_source": "synthetic Qwen3Config() weights (max_position_embeddings=4096)",
+  "input_source": "synthetic exact-length token ids (seq_len=2048)",
+  "mode": "full",
+  "seq_len": 2048,
+  "warmup": 5,
+  "iters": 10,
+  "quant_threshold": 0.01,
+  "v_threshold": 0.05,
+  "default_meta": {
+    "BLOCK_M": 128,
+    "BLOCK_N": 64,
+    "num_warps": 4,
+    "num_stages": 1
+  },
+  "recommendation": "Best full candidate differs from current default. Promote {'BLOCK_M': 32, 'BLOCK_N': 64, 'num_warps': 4, 'num_stages': 2} into the next Qwen3 ablation pass; worst-to-best spread is 73.56%.",
+  "valid_results": [
+    {
+      "meta": {
+        "BLOCK_M": 32,
+        "BLOCK_N": 64,
+        "num_warps": 4,
+        "num_stages": 2
+      },
+      "ms": 54.61217,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 0.891489,
+      "delta_vs_default_meta_ms": -19.213312
+    },
+    {
+      "meta": {
+        "BLOCK_M": 32,
+        "BLOCK_N": 64,
+        "num_warps": 4,
+        "num_stages": 1
+      },
+      "ms": 54.625385,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 0.891705,
+      "delta_vs_default_meta_ms": -19.200097
+    },
+    {
+      "meta": {
+        "BLOCK_M": 32,
+        "BLOCK_N": 64,
+        "num_warps": 4,
+        "num_stages": 3
+      },
+      "ms": 54.704126,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 0.892991,
+      "delta_vs_default_meta_ms": -19.121356
+    },
+    {
+      "meta": {
+        "BLOCK_M": 64,
+        "BLOCK_N": 64,
+        "num_warps": 8,
+        "num_stages": 2
+      },
+      "ms": 54.952655,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 0.897048,
+      "delta_vs_default_meta_ms": -18.872827
+    },
+    {
+      "meta": {
+        "BLOCK_M": 64,
+        "BLOCK_N": 64,
+        "num_warps": 8,
+        "num_stages": 3
+      },
+      "ms": 54.983063,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 0.897544,
+      "delta_vs_default_meta_ms": -18.842419
+    },
+    {
+      "meta": {
+        "BLOCK_M": 64,
+        "BLOCK_N": 64,
+        "num_warps": 8,
+        "num_stages": 1
+      },
+      "ms": 55.013885,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 0.898047,
+      "delta_vs_default_meta_ms": -18.811597
+    },
+    {
+      "meta": {
+        "BLOCK_M": 32,
+        "BLOCK_N": 32,
+        "num_warps": 4,
+        "num_stages": 1
+      },
+      "ms": 55.030682,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 0.898321,
+      "delta_vs_default_meta_ms": -18.7948
+    },
+    {
+      "meta": {
+        "BLOCK_M": 32,
+        "BLOCK_N": 128,
+        "num_warps": 8,
+        "num_stages": 1
+      },
+      "ms": 55.09325,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 0.899343,
+      "delta_vs_default_meta_ms": -18.732232
+    },
+    {
+      "meta": {
+        "BLOCK_M": 32,
+        "BLOCK_N": 128,
+        "num_warps": 8,
+        "num_stages": 2
+      },
+      "ms": 55.149365,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 0.900259,
+      "delta_vs_default_meta_ms": -18.676117
+    },
+    {
+      "meta": {
+        "BLOCK_M": 32,
+        "BLOCK_N": 128,
+        "num_warps": 8,
+        "num_stages": 3
+      },
+      "ms": 55.160321,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 0.900438,
+      "delta_vs_default_meta_ms": -18.665161
+    },
+    {
+      "meta": {
+        "BLOCK_M": 32,
+        "BLOCK_N": 32,
+        "num_warps": 4,
+        "num_stages": 3
+      },
+      "ms": 55.268555,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 0.902204,
+      "delta_vs_default_meta_ms": -18.556927
+    },
+    {
+      "meta": {
+        "BLOCK_M": 32,
+        "BLOCK_N": 32,
+        "num_warps": 4,
+        "num_stages": 2
+      },
+      "ms": 55.278693,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 0.90237,
+      "delta_vs_default_meta_ms": -18.546789
+    },
+    {
+      "meta": {
+        "BLOCK_M": 64,
+        "BLOCK_N": 32,
+        "num_warps": 4,
+        "num_stages": 2
+      },
+      "ms": 55.485645,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 0.905748,
+      "delta_vs_default_meta_ms": -18.339837
+    },
+    {
+      "meta": {
+        "BLOCK_M": 64,
+        "BLOCK_N": 32,
+        "num_warps": 4,
+        "num_stages": 3
+      },
+      "ms": 55.620709,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 0.907953,
+      "delta_vs_default_meta_ms": -18.204773
+    },
+    {
+      "meta": {
+        "BLOCK_M": 64,
+        "BLOCK_N": 32,
+        "num_warps": 4,
+        "num_stages": 1
+      },
+      "ms": 55.66925,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 0.908745,
+      "delta_vs_default_meta_ms": -18.156232
+    },
+    {
+      "meta": {
+        "BLOCK_M": 32,
+        "BLOCK_N": 64,
+        "num_warps": 8,
+        "num_stages": 2
+      },
+      "ms": 55.7354,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 0.909825,
+      "delta_vs_default_meta_ms": -18.090082
+    },
+    {
+      "meta": {
+        "BLOCK_M": 32,
+        "BLOCK_N": 64,
+        "num_warps": 8,
+        "num_stages": 1
+      },
+      "ms": 55.755469,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 0.910153,
+      "delta_vs_default_meta_ms": -18.070013
+    },
+    {
+      "meta": {
+        "BLOCK_M": 32,
+        "BLOCK_N": 64,
+        "num_warps": 8,
+        "num_stages": 3
+      },
+      "ms": 55.781989,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 0.910586,
+      "delta_vs_default_meta_ms": -18.043493
+    },
+    {
+      "meta": {
+        "BLOCK_M": 128,
+        "BLOCK_N": 32,
+        "num_warps": 8,
+        "num_stages": 1
+      },
+      "ms": 57.056769,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 0.931395,
+      "delta_vs_default_meta_ms": -16.768713
+    },
+    {
+      "meta": {
+        "BLOCK_M": 128,
+        "BLOCK_N": 32,
+        "num_warps": 8,
+        "num_stages": 2
+      },
+      "ms": 57.126709,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 0.932537,
+      "delta_vs_default_meta_ms": -16.698773
+    },
+    {
+      "meta": {
+        "BLOCK_M": 64,
+        "BLOCK_N": 128,
+        "num_warps": 8,
+        "num_stages": 2
+      },
+      "ms": 57.142474,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 0.932794,
+      "delta_vs_default_meta_ms": -16.683008
+    },
+    {
+      "meta": {
+        "BLOCK_M": 128,
+        "BLOCK_N": 32,
+        "num_warps": 8,
+        "num_stages": 3
+      },
+      "ms": 57.175653,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 0.933336,
+      "delta_vs_default_meta_ms": -16.649829
+    },
+    {
+      "meta": {
+        "BLOCK_M": 64,
+        "BLOCK_N": 128,
+        "num_warps": 8,
+        "num_stages": 3
+      },
+      "ms": 57.252252,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 0.934586,
+      "delta_vs_default_meta_ms": -16.57323
+    },
+    {
+      "meta": {
+        "BLOCK_M": 32,
+        "BLOCK_N": 128,
+        "num_warps": 4,
+        "num_stages": 3
+      },
+      "ms": 57.300684,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 0.935377,
+      "delta_vs_default_meta_ms": -16.524798
+    },
+    {
+      "meta": {
+        "BLOCK_M": 32,
+        "BLOCK_N": 128,
+        "num_warps": 4,
+        "num_stages": 2
+      },
+      "ms": 57.331714,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 0.935883,
+      "delta_vs_default_meta_ms": -16.493768
+    },
+    {
+      "meta": {
+        "BLOCK_M": 64,
+        "BLOCK_N": 128,
+        "num_warps": 8,
+        "num_stages": 1
+      },
+      "ms": 57.352704,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 0.936226,
+      "delta_vs_default_meta_ms": -16.472778
+    },
+    {
+      "meta": {
+        "BLOCK_M": 32,
+        "BLOCK_N": 128,
+        "num_warps": 4,
+        "num_stages": 1
+      },
+      "ms": 57.353418,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 0.936238,
+      "delta_vs_default_meta_ms": -16.472064
+    },
+    {
+      "meta": {
+        "BLOCK_M": 64,
+        "BLOCK_N": 32,
+        "num_warps": 8,
+        "num_stages": 1
+      },
+      "ms": 57.442102,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 0.937685,
+      "delta_vs_default_meta_ms": -16.38338
+    },
+    {
+      "meta": {
+        "BLOCK_M": 64,
+        "BLOCK_N": 32,
+        "num_warps": 8,
+        "num_stages": 3
+      },
+      "ms": 57.461041,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 0.937994,
+      "delta_vs_default_meta_ms": -16.364441
+    },
+    {
+      "meta": {
+        "BLOCK_M": 64,
+        "BLOCK_N": 32,
+        "num_warps": 8,
+        "num_stages": 2
+      },
+      "ms": 57.473334,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 0.938195,
+      "delta_vs_default_meta_ms": -16.352148
+    },
+    {
+      "meta": {
+        "BLOCK_M": 32,
+        "BLOCK_N": 32,
+        "num_warps": 8,
+        "num_stages": 1
+      },
+      "ms": 58.2271,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 0.9505,
+      "delta_vs_default_meta_ms": -15.598382
+    },
+    {
+      "meta": {
+        "BLOCK_M": 32,
+        "BLOCK_N": 32,
+        "num_warps": 8,
+        "num_stages": 3
+      },
+      "ms": 58.359705,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 0.952664,
+      "delta_vs_default_meta_ms": -15.465777
+    },
+    {
+      "meta": {
+        "BLOCK_M": 32,
+        "BLOCK_N": 32,
+        "num_warps": 2,
+        "num_stages": 2
+      },
+      "ms": 58.392578,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 0.953201,
+      "delta_vs_default_meta_ms": -15.432904
+    },
+    {
+      "meta": {
+        "BLOCK_M": 32,
+        "BLOCK_N": 32,
+        "num_warps": 8,
+        "num_stages": 2
+      },
+      "ms": 58.451764,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 0.954167,
+      "delta_vs_default_meta_ms": -15.373718
+    },
+    {
+      "meta": {
+        "BLOCK_M": 32,
+        "BLOCK_N": 32,
+        "num_warps": 2,
+        "num_stages": 1
+      },
+      "ms": 58.463336,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 0.954356,
+      "delta_vs_default_meta_ms": -15.362146
+    },
+    {
+      "meta": {
+        "BLOCK_M": 32,
+        "BLOCK_N": 32,
+        "num_warps": 2,
+        "num_stages": 3
+      },
+      "ms": 58.610791,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 0.956763,
+      "delta_vs_default_meta_ms": -15.214691
+    },
+    {
+      "meta": {
+        "BLOCK_M": 128,
+        "BLOCK_N": 64,
+        "num_warps": 8,
+        "num_stages": 1
+      },
+      "ms": 59.305267,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 0.9681,
+      "delta_vs_default_meta_ms": -14.520215
+    },
+    {
+      "meta": {
+        "BLOCK_M": 128,
+        "BLOCK_N": 64,
+        "num_warps": 8,
+        "num_stages": 3
+      },
+      "ms": 59.353394,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 0.968885,
+      "delta_vs_default_meta_ms": -14.472088
+    },
+    {
+      "meta": {
+        "BLOCK_M": 128,
+        "BLOCK_N": 64,
+        "num_warps": 8,
+        "num_stages": 2
+      },
+      "ms": 59.42323,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 0.970025,
+      "delta_vs_default_meta_ms": -14.402252
+    },
+    {
+      "meta": {
+        "BLOCK_M": 64,
+        "BLOCK_N": 64,
+        "num_warps": 4,
+        "num_stages": 1
+      },
+      "ms": 60.57851,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 0.988884,
+      "delta_vs_default_meta_ms": -13.246972
+    },
+    {
+      "meta": {
+        "BLOCK_M": 64,
+        "BLOCK_N": 64,
+        "num_warps": 4,
+        "num_stages": 2
+      },
+      "ms": 60.580658,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 0.988919,
+      "delta_vs_default_meta_ms": -13.244824
+    },
+    {
+      "meta": {
+        "BLOCK_M": 64,
+        "BLOCK_N": 64,
+        "num_warps": 4,
+        "num_stages": 3
+      },
+      "ms": 60.624591,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 0.989636,
+      "delta_vs_default_meta_ms": -13.200891
+    },
+    {
+      "meta": {
+        "BLOCK_M": 64,
+        "BLOCK_N": 128,
+        "num_warps": 4,
+        "num_stages": 2
+      },
+      "ms": 61.002753,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 0.995809,
+      "delta_vs_default_meta_ms": -12.822729
+    },
+    {
+      "meta": {
+        "BLOCK_M": 64,
+        "BLOCK_N": 128,
+        "num_warps": 4,
+        "num_stages": 3
+      },
+      "ms": 61.234076,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 0.999586,
+      "delta_vs_default_meta_ms": -12.591406
+    },
+    {
+      "meta": {
+        "BLOCK_M": 64,
+        "BLOCK_N": 128,
+        "num_warps": 4,
+        "num_stages": 1
+      },
+      "ms": 61.275647,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 1.000264,
+      "delta_vs_default_meta_ms": -12.549835
+    },
+    {
+      "meta": {
+        "BLOCK_M": 32,
+        "BLOCK_N": 64,
+        "num_warps": 2,
+        "num_stages": 2
+      },
+      "ms": 62.746826,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 1.02428,
+      "delta_vs_default_meta_ms": -11.078656
+    },
+    {
+      "meta": {
+        "BLOCK_M": 32,
+        "BLOCK_N": 64,
+        "num_warps": 2,
+        "num_stages": 1
+      },
+      "ms": 62.761676,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 1.024522,
+      "delta_vs_default_meta_ms": -11.063806
+    },
+    {
+      "meta": {
+        "BLOCK_M": 32,
+        "BLOCK_N": 64,
+        "num_warps": 2,
+        "num_stages": 3
+      },
+      "ms": 62.830182,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 1.02564,
+      "delta_vs_default_meta_ms": -10.9953
+    },
+    {
+      "meta": {
+        "BLOCK_M": 128,
+        "BLOCK_N": 64,
+        "num_warps": 4,
+        "num_stages": 1
+      },
+      "ms": 73.825482,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 1.205128,
+      "delta_vs_default_meta_ms": 0.0
+    },
+    {
+      "meta": {
+        "BLOCK_M": 128,
+        "BLOCK_N": 64,
+        "num_warps": 4,
+        "num_stages": 2
+      },
+      "ms": 73.833881,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 1.205265,
+      "delta_vs_default_meta_ms": 0.008399
+    },
+    {
+      "meta": {
+        "BLOCK_M": 128,
+        "BLOCK_N": 64,
+        "num_warps": 4,
+        "num_stages": 3
+      },
+      "ms": 73.849652,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 1.205522,
+      "delta_vs_default_meta_ms": 0.02417
+    },
+    {
+      "meta": {
+        "BLOCK_M": 64,
+        "BLOCK_N": 64,
+        "num_warps": 2,
+        "num_stages": 1
+      },
+      "ms": 81.121692,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 1.324231,
+      "delta_vs_default_meta_ms": 7.29621
+    },
+    {
+      "meta": {
+        "BLOCK_M": 64,
+        "BLOCK_N": 64,
+        "num_warps": 2,
+        "num_stages": 2
+      },
+      "ms": 81.201562,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 1.325535,
+      "delta_vs_default_meta_ms": 7.37608
+    },
+    {
+      "meta": {
+        "BLOCK_M": 64,
+        "BLOCK_N": 64,
+        "num_warps": 2,
+        "num_stages": 3
+      },
+      "ms": 81.229926,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 1.325998,
+      "delta_vs_default_meta_ms": 7.404444
+    },
+    {
+      "meta": {
+        "BLOCK_M": 32,
+        "BLOCK_N": 128,
+        "num_warps": 2,
+        "num_stages": 1
+      },
+      "ms": 82.240308,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 1.342491,
+      "delta_vs_default_meta_ms": 8.414826
+    },
+    {
+      "meta": {
+        "BLOCK_M": 32,
+        "BLOCK_N": 128,
+        "num_warps": 2,
+        "num_stages": 2
+      },
+      "ms": 82.266827,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 1.342924,
+      "delta_vs_default_meta_ms": 8.441345
+    },
+    {
+      "meta": {
+        "BLOCK_M": 32,
+        "BLOCK_N": 128,
+        "num_warps": 2,
+        "num_stages": 3
+      },
+      "ms": 82.318848,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 1.343773,
+      "delta_vs_default_meta_ms": 8.493366
+    },
+    {
+      "meta": {
+        "BLOCK_M": 64,
+        "BLOCK_N": 32,
+        "num_warps": 2,
+        "num_stages": 1
+      },
+      "ms": 86.027979,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 1.404321,
+      "delta_vs_default_meta_ms": 12.202497
+    },
+    {
+      "meta": {
+        "BLOCK_M": 64,
+        "BLOCK_N": 32,
+        "num_warps": 2,
+        "num_stages": 2
+      },
+      "ms": 86.048975,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 1.404664,
+      "delta_vs_default_meta_ms": 12.223493
+    },
+    {
+      "meta": {
+        "BLOCK_M": 64,
+        "BLOCK_N": 32,
+        "num_warps": 2,
+        "num_stages": 3
+      },
+      "ms": 86.06925,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 1.404995,
+      "delta_vs_default_meta_ms": 12.243768
+    },
+    {
+      "meta": {
+        "BLOCK_M": 128,
+        "BLOCK_N": 64,
+        "num_warps": 2,
+        "num_stages": 1
+      },
+      "ms": 159.204858,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 2.598861,
+      "delta_vs_default_meta_ms": 85.379376
+    },
+    {
+      "meta": {
+        "BLOCK_M": 128,
+        "BLOCK_N": 64,
+        "num_warps": 2,
+        "num_stages": 3
+      },
+      "ms": 159.263745,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 2.599823,
+      "delta_vs_default_meta_ms": 85.438263
+    },
+    {
+      "meta": {
+        "BLOCK_M": 128,
+        "BLOCK_N": 64,
+        "num_warps": 2,
+        "num_stages": 2
+      },
+      "ms": 159.36665,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 2.601502,
+      "delta_vs_default_meta_ms": 85.541168
+    },
+    {
+      "meta": {
+        "BLOCK_M": 64,
+        "BLOCK_N": 128,
+        "num_warps": 2,
+        "num_stages": 2
+      },
+      "ms": 160.538013,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 2.620624,
+      "delta_vs_default_meta_ms": 86.712531
+    },
+    {
+      "meta": {
+        "BLOCK_M": 64,
+        "BLOCK_N": 128,
+        "num_warps": 2,
+        "num_stages": 1
+      },
+      "ms": 160.612354,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 2.621837,
+      "delta_vs_default_meta_ms": 86.786872
+    },
+    {
+      "meta": {
+        "BLOCK_M": 64,
+        "BLOCK_N": 128,
+        "num_warps": 2,
+        "num_stages": 3
+      },
+      "ms": 160.657104,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 2.622568,
+      "delta_vs_default_meta_ms": 86.831622
+    },
+    {
+      "meta": {
+        "BLOCK_M": 128,
+        "BLOCK_N": 32,
+        "num_warps": 2,
+        "num_stages": 3
+      },
+      "ms": 166.936267,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 2.725069,
+      "delta_vs_default_meta_ms": 93.110785
+    },
+    {
+      "meta": {
+        "BLOCK_M": 128,
+        "BLOCK_N": 32,
+        "num_warps": 2,
+        "num_stages": 1
+      },
+      "ms": 166.955627,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 2.725385,
+      "delta_vs_default_meta_ms": 93.130145
+    },
+    {
+      "meta": {
+        "BLOCK_M": 128,
+        "BLOCK_N": 32,
+        "num_warps": 2,
+        "num_stages": 2
+      },
+      "ms": 168.027747,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 2.742886,
+      "delta_vs_default_meta_ms": 94.202265
+    },
+    {
+      "meta": {
+        "BLOCK_M": 128,
+        "BLOCK_N": 32,
+        "num_warps": 4,
+        "num_stages": 3
+      },
+      "ms": 206.453345,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 3.370146,
+      "delta_vs_default_meta_ms": 132.627863
+    },
+    {
+      "meta": {
+        "BLOCK_M": 128,
+        "BLOCK_N": 32,
+        "num_warps": 4,
+        "num_stages": 1
+      },
+      "ms": 206.513159,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 3.371122,
+      "delta_vs_default_meta_ms": 132.687677
+    },
+    {
+      "meta": {
+        "BLOCK_M": 128,
+        "BLOCK_N": 32,
+        "num_warps": 4,
+        "num_stages": 2
+      },
+      "ms": 206.588916,
+      "baseline_ms": 61.259467,
+      "slowdown_vs_baseline": 3.372359,
+      "delta_vs_default_meta_ms": 132.763434
+    }
+  ],
+  "skipped_results": [
+    {
+      "meta": {
+        "BLOCK_M": 128,
+        "BLOCK_N": 128,
+        "num_warps": 2,
+        "num_stages": 1
+      },
+      "reason": "OutOfResources: out of resource: shared memory, Required: 131072, Hardware limit: 101376. Reducing block sizes or `num_stages` may help."
+    },
+    {
+      "meta": {
+        "BLOCK_M": 128,
+        "BLOCK_N": 128,
+        "num_warps": 2,
+        "num_stages": 2
+      },
+      "reason": "OutOfResources: out of resource: shared memory, Required: 131072, Hardware limit: 101376. Reducing block sizes or `num_stages` may help."
+    },
+    {
+      "meta": {
+        "BLOCK_M": 128,
+        "BLOCK_N": 128,
+        "num_warps": 2,
+        "num_stages": 3
+      },
+      "reason": "OutOfResources: out of resource: shared memory, Required: 131072, Hardware limit: 101376. Reducing block sizes or `num_stages` may help."
+    },
+    {
+      "meta": {
+        "BLOCK_M": 128,
+        "BLOCK_N": 128,
+        "num_warps": 4,
+        "num_stages": 1
+      },
+      "reason": "OutOfResources: out of resource: shared memory, Required: 131072, Hardware limit: 101376. Reducing block sizes or `num_stages` may help."
+    },
+    {
+      "meta": {
+        "BLOCK_M": 128,
+        "BLOCK_N": 128,
+        "num_warps": 4,
+        "num_stages": 2
+      },
+      "reason": "OutOfResources: out of resource: shared memory, Required: 131072, Hardware limit: 101376. Reducing block sizes or `num_stages` may help."
+    },
+    {
+      "meta": {
+        "BLOCK_M": 128,
+        "BLOCK_N": 128,
+        "num_warps": 4,
+        "num_stages": 3
+      },
+      "reason": "OutOfResources: out of resource: shared memory, Required: 131072, Hardware limit: 101376. Reducing block sizes or `num_stages` may help."
+    },
+    {
+      "meta": {
+        "BLOCK_M": 128,
+        "BLOCK_N": 128,
+        "num_warps": 8,
+        "num_stages": 1
+      },
+      "reason": "OutOfResources: out of resource: shared memory, Required: 131072, Hardware limit: 101376. Reducing block sizes or `num_stages` may help."
+    },
+    {
+      "meta": {
+        "BLOCK_M": 128,
+        "BLOCK_N": 128,
+        "num_warps": 8,
+        "num_stages": 2
+      },
+      "reason": "OutOfResources: out of resource: shared memory, Required: 131072, Hardware limit: 101376. Reducing block sizes or `num_stages` may help."
+    },
+    {
+      "meta": {
+        "BLOCK_M": 128,
+        "BLOCK_N": 128,
+        "num_warps": 8,
+        "num_stages": 3
+      },
+      "reason": "OutOfResources: out of resource: shared memory, Required: 131072, Hardware limit: 101376. Reducing block sizes or `num_stages` may help."
+    }
+  ]
+}

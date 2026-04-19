@@ -1,0 +1,100 @@
+{
+  "timestamp": "20260418_223443",
+  "device": "NVIDIA GeForce RTX 3090",
+  "model_source": "synthetic Qwen3Config() weights (max_position_embeddings=8194)",
+  "seq_lens": [
+    2048,
+    4096,
+    8192
+  ],
+  "warmup": 5,
+  "iters": 10,
+  "quant_threshold": 0.01,
+  "v_threshold": 0.05,
+  "results": [
+    {
+      "seq_len": 2048,
+      "input_source": "synthetic exact-length token ids (seq_len=2048)",
+      "results": {
+        "baseline": {
+          "ms": 60.674457,
+          "mode": "baseline",
+          "slowdown_vs_baseline": 1.0
+        },
+        "quant_only": {
+          "ms": 53.513831,
+          "mode": "quant_only",
+          "slowdown_vs_baseline": 0.881983
+        },
+        "v_prune_only": {
+          "ms": 55.066113,
+          "mode": "v_prune_only",
+          "slowdown_vs_baseline": 0.907567
+        },
+        "full": {
+          "ms": 53.845404,
+          "mode": "full",
+          "slowdown_vs_baseline": 0.887448
+        }
+      },
+      "best_variant": "quant_only",
+      "recommendation": "Quant-only is the fastest Qwen3 SpAtten variant; next step should focus on progressive quantization under causal attention."
+    },
+    {
+      "seq_len": 4096,
+      "input_source": "synthetic exact-length token ids (seq_len=4096)",
+      "results": {
+        "baseline": {
+          "ms": 146.931299,
+          "mode": "baseline",
+          "slowdown_vs_baseline": 1.0
+        },
+        "quant_only": {
+          "ms": 120.440015,
+          "mode": "quant_only",
+          "slowdown_vs_baseline": 0.819703
+        },
+        "v_prune_only": {
+          "ms": 126.814209,
+          "mode": "v_prune_only",
+          "slowdown_vs_baseline": 0.863085
+        },
+        "full": {
+          "ms": 121.817603,
+          "mode": "full",
+          "slowdown_vs_baseline": 0.829079
+        }
+      },
+      "best_variant": "quant_only",
+      "recommendation": "Quant-only is the fastest Qwen3 SpAtten variant; next step should focus on progressive quantization under causal attention."
+    },
+    {
+      "seq_len": 8192,
+      "input_source": "synthetic exact-length token ids (seq_len=8192)",
+      "results": {
+        "baseline": {
+          "ms": 409.816699,
+          "mode": "baseline",
+          "slowdown_vs_baseline": 1.0
+        },
+        "quant_only": {
+          "ms": 302.432251,
+          "mode": "quant_only",
+          "slowdown_vs_baseline": 0.73797
+        },
+        "v_prune_only": {
+          "ms": 332.359375,
+          "mode": "v_prune_only",
+          "slowdown_vs_baseline": 0.810995
+        },
+        "full": {
+          "ms": 315.26604,
+          "mode": "full",
+          "slowdown_vs_baseline": 0.769285
+        }
+      },
+      "best_variant": "quant_only",
+      "recommendation": "Quant-only is the fastest Qwen3 SpAtten variant; next step should focus on progressive quantization under causal attention."
+    }
+  ]
+}
