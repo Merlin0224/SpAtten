@@ -1,0 +1,92 @@
+{
+  "timestamp": "20260420_144624",
+  "device": "NVIDIA GeForce RTX 3090",
+  "model_name": "/root/autodl-tmp/models/Qwen3-0.6B-ms",
+  "metric_template": {
+    "prefill_ms": "Prompt forward latency with use_cache=True",
+    "decode_1tok_ms": "Single cached decode step latency after prefill",
+    "ttft_ms": "Time-to-first-token measured by generate(max_new_tokens=1)",
+    "decode_tok_per_s": "1000 / decode_1tok_ms"
+  },
+  "seq_lens": [
+    1024,
+    2048
+  ],
+  "warmup": 2,
+  "iters": 3,
+  "quant_threshold": 0.01,
+  "v_threshold": 0.05,
+  "enable_head_prune": true,
+  "head_prune_num": 1,
+  "head_prune_start_layer": 0,
+  "head_prune_interval": 1,
+  "gpu_memory_utilization": 0.6,
+  "results": {
+    "1024": {
+      "hf": {
+        "prefill_ms": 43.150335,
+        "decode_1tok_ms": 61.255681,
+        "ttft_ms": 33.227114,
+        "decode_tok_per_s": 16.325016
+      },
+      "vllm": {
+        "ttft_ms": 8.292096,
+        "prefill_ms": null,
+        "decode_1tok_ms": null,
+        "decode_tok_per_s": null
+      },
+      "spatten_quant": {
+        "prefill_ms": 97.651367,
+        "decode_1tok_ms": 147.026265,
+        "ttft_ms": 59.831019,
+        "decode_tok_per_s": 6.801506
+      },
+      "spatten_v": {
+        "prefill_ms": 58.627411,
+        "decode_1tok_ms": 111.770284,
+        "ttft_ms": 58.601384,
+        "decode_tok_per_s": 8.946922
+      },
+      "spatten_full": {
+        "prefill_ms": 59.113475,
+        "decode_1tok_ms": 111.064402,
+        "ttft_ms": 59.718536,
+        "decode_tok_per_s": 9.003785
+      },
+      "best_variant": "vllm"
+    },
+    "2048": {
+      "hf": {
+        "prefill_ms": 70.620845,
+        "decode_1tok_ms": 95.680166,
+        "ttft_ms": 64.295522,
+        "decode_tok_per_s": 10.451487
+      },
+      "vllm": {
+        "ttft_ms": 11.175119,
+        "prefill_ms": null,
+        "decode_1tok_ms": null,
+        "decode_tok_per_s": null
+      },
+      "spatten_quant": {
+        "prefill_ms": 83.019435,
+        "decode_1tok_ms": 132.302846,
+        "ttft_ms": 77.268799,
+        "decode_tok_per_s": 7.558416
+      },
+      "spatten_v": {
+        "prefill_ms": 79.117996,
+        "decode_1tok_ms": 131.219452,
+        "ttft_ms": 73.298177,
+        "decode_tok_per_s": 7.620821
+      },
+      "spatten_full": {
+        "prefill_ms": 82.396159,
+        "decode_1tok_ms": 134.140249,
+        "ttft_ms": 76.176585,
+        "decode_tok_per_s": 7.454884
+      },
+      "best_variant": "vllm"
+    }
+  }
+}

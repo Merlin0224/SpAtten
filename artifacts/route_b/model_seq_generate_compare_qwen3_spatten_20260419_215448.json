@@ -1,0 +1,55 @@
+{
+  "timestamp": "20260419_215448",
+  "device": "NVIDIA GeForce RTX 3090",
+  "model_name": "/root/autodl-tmp/models/Qwen3-0.6B-ms",
+  "metric": "prefill_plus_1_token_generation_latency_ms",
+  "seq_lens": [
+    1024,
+    2048,
+    4096,
+    8192
+  ],
+  "warmup": 5,
+  "iters": 10,
+  "quant_threshold": 0.01,
+  "v_threshold": 0.05,
+  "enable_head_prune": true,
+  "head_prune_num": 1,
+  "head_prune_start_layer": 0,
+  "head_prune_interval": 1,
+  "gpu_memory_utilization": 0.6,
+  "results": {
+    "1024": {
+      "hf_generate_ms": 44.15043,
+      "vllm_ms": 10.288337,
+      "spatten_quant_ms": 81.011633,
+      "spatten_v_ms": 58.394153,
+      "spatten_full_ms": 58.431335,
+      "best_variant": "vllm"
+    },
+    "2048": {
+      "hf_generate_ms": 66.394037,
+      "vllm_ms": 11.896259,
+      "spatten_quant_ms": 88.686755,
+      "spatten_v_ms": 73.708594,
+      "spatten_full_ms": 77.283282,
+      "best_variant": "vllm"
+    },
+    "4096": {
+      "hf_generate_ms": 140.884277,
+      "vllm_ms": 16.52428,
+      "spatten_quant_ms": 162.926746,
+      "spatten_v_ms": 149.446899,
+      "spatten_full_ms": 159.797278,
+      "best_variant": "vllm"
+    },
+    "8192": {
+      "hf_generate_ms": 328.349878,
+      "vllm_ms": 27.786513,
+      "spatten_quant_ms": 383.884766,
+      "spatten_v_ms": 341.359155,
+      "spatten_full_ms": 378.272778,
+      "best_variant": "vllm"
+    }
+  }
+}

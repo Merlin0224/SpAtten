@@ -12,13 +12,14 @@ def slice_linear_weights(linear_layer, active_indices, num_heads, head_dim):
     bias = linear_layer.bias
 
     w_view = weight.view(num_heads, head_dim, -1)
-    b_view = bias.view(num_heads, head_dim)
-
     w_subset = torch.index_select(w_view, 0, active_indices)
-    b_subset = torch.index_select(b_view, 0, active_indices)
-
     w_out = w_subset.reshape(-1, w_subset.size(-1))
-    b_out = b_subset.reshape(-1)
+    if bias is None:
+        b_out = None
+    else:
+        b_view = bias.view(num_heads, head_dim)
+        b_subset = torch.index_select(b_view, 0, active_indices)
+        b_out = b_subset.reshape(-1)
     return w_out, b_out
 
 
@@ -32,7 +33,14 @@ def slice_qkv_weights(query_layer, key_layer, value_layer, active_indices, num_h
     v_w, v_b = slice_linear_weights(value_layer, active_indices, num_heads, head_dim)
 
     packed_w = torch.cat([q_w, k_w, v_w], dim=0).contiguous()
-    packed_b = torch.cat([q_b, k_b, v_b], dim=0).contiguous()
+
+    if q_b is None and k_b is None and v_b is None:
+        packed_b = None
+    else:
+        q_b = q_b if q_b is not None else torch.zeros(q_w.size(0), device=q_w.device, dtype=q_w.dtype)
+        k_b = k_b if k_b is not None else torch.zeros(k_w.size(0), device=k_w.device, dtype=k_w.dtype)
+        v_b = v_b if v_b is not None else torch.zeros(v_w.size(0), device=v_w.device, dtype=v_w.dtype)
+        packed_b = torch.cat([q_b, k_b, v_b], dim=0).contiguous()
     return packed_w, packed_b
 
 

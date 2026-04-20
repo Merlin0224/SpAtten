@@ -5,6 +5,7 @@ os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 import copy
 
 import torch
+import torch.nn.functional as F
 import triton
 import triton.language as tl
 from transformers import AutoTokenizer, Qwen3Config, Qwen3Model
@@ -19,7 +20,7 @@ from transformers.models.qwen3.modeling_qwen3 import (
 )
 
 from spattn.spatten_bert_bf16_msb import prepare_progressive_k_bf16_msb
-from module import compact_token_state
+from module import compact_token_state, slice_linear_weights, slice_qkv_weights
 
 
 TRITON_META_DEFAULTS = {
@@ -125,9 +126,14 @@ def load_qwen3_model_local_or_synthetic(
 ):
     if not prefer_synthetic:
         try:
-            model = Qwen3Model.from_pretrained(model_name, local_files_only=True)
+            model = Qwen3Model.from_pretrained(
+                model_name,
+                local_files_only=True,
+                torch_dtype=torch.float16,
+                trust_remote_code=True,
+            )
             source = f"local pretrained cache: {model_name}"
-            return model.to(device).float().eval(), source
+            return model.to(device).eval(), source
         except Exception:
             pass
 
@@ -206,7 +212,7 @@ def _progressive_qk_causal_kernel(
     offs_d = tl.arange(0, d_model)
 
     q_ptrs = q_base + offs_m[:, None] * stride_qm + offs_d[None, :] * stride_qk
-    qi = tl.load(q_ptrs, mask=offs_m[:, None] < N_CTX_Q, other=0.0)
+    qi = tl.load(q_ptrs, mask=offs_m[:, None] < N_CTX_Q, other=0.0).to(tl.float32)
     neg_inf = -1.0e6
 
     m_i = tl.zeros([BLOCK_M], dtype=tl.float32) - float("inf")
@@ -232,7 +238,7 @@ def _progressive_qk_causal_kernel(
             max_score = tl.max(qk)
             if max_score < threshold:
                 k_lsb_ptrs = k_lsb_base + offs_n_curr[:, None] * stride_kn + offs_d[None, :] * stride_kk
-                k_lsb = tl.load(k_lsb_ptrs, mask=offs_n_curr[:, None] < N_CTX_K, other=0.0)
+                k_lsb = tl.load(k_lsb_ptrs, mask=offs_n_curr[:, None] < N_CTX_K, other=0.0).to(tl.float32)
                 qk_lsb = tl.dot(qi, tl.trans(k_lsb)) * sm_scale
                 qk = tl.where(valid, qk + qk_lsb, neg_inf)
 
@@ -294,7 +300,7 @@ def _progressive_qk_causal_autotuned_kernel(
     offs_d = tl.arange(0, d_model)
 
     q_ptrs = q_base + offs_m[:, None] * stride_qm + offs_d[None, :] * stride_qk
-    qi = tl.load(q_ptrs, mask=offs_m[:, None] < N_CTX_Q, other=0.0)
+    qi = tl.load(q_ptrs, mask=offs_m[:, None] < N_CTX_Q, other=0.0).to(tl.float32)
     neg_inf = -1.0e6
 
     m_i = tl.zeros([BLOCK_M], dtype=tl.float32) - float("inf")
@@ -320,7 +326,7 @@ def _progressive_qk_causal_autotuned_kernel(
             max_score = tl.max(qk)
             if max_score < threshold:
                 k_lsb_ptrs = k_lsb_base + offs_n_curr[:, None] * stride_kn + offs_d[None, :] * stride_kk
-                k_lsb = tl.load(k_lsb_ptrs, mask=offs_n_curr[:, None] < N_CTX_K, other=0.0)
+                k_lsb = tl.load(k_lsb_ptrs, mask=offs_n_curr[:, None] < N_CTX_K, other=0.0).to(tl.float32)
                 qk_lsb = tl.dot(qi, tl.trans(k_lsb)) * sm_scale
                 qk = tl.where(valid, qk + qk_lsb, neg_inf)
 
@@ -552,7 +558,7 @@ def _spatten_fused_ultimate_causal_kernel(
     offs_d = tl.arange(0, d_model)
 
     q_ptrs = q_base + offs_m[:, None] * stride_qm + offs_d[None, :] * stride_qk
-    qi = tl.load(q_ptrs, mask=offs_m[:, None] < N_CTX_Q, other=0.0)
+    qi = tl.load(q_ptrs, mask=offs_m[:, None] < N_CTX_Q, other=0.0).to(tl.float32)
     neg_inf = -1.0e6
 
     m_i = tl.zeros([BLOCK_M], dtype=tl.float32) - float("inf")
@@ -578,7 +584,7 @@ def _spatten_fused_ultimate_causal_kernel(
             max_score = tl.max(qk)
             if max_score < quant_threshold:
                 k_lsb_ptrs = k_lsb_base + offs_n_curr[:, None] * stride_kn + offs_d[None, :] * stride_kk
-                k_lsb = tl.load(k_lsb_ptrs, mask=offs_n_curr[:, None] < N_CTX_K, other=0.0)
+                k_lsb = tl.load(k_lsb_ptrs, mask=offs_n_curr[:, None] < N_CTX_K, other=0.0).to(tl.float32)
                 qk_lsb = tl.dot(qi, tl.trans(k_lsb)) * sm_scale
                 qk = tl.where(valid, qk + qk_lsb, neg_inf)
 
@@ -649,7 +655,7 @@ def _spatten_fused_ultimate_causal_autotuned_kernel(
     offs_d = tl.arange(0, d_model)
 
     q_ptrs = q_base + offs_m[:, None] * stride_qm + offs_d[None, :] * stride_qk
-    qi = tl.load(q_ptrs, mask=offs_m[:, None] < N_CTX_Q, other=0.0)
+    qi = tl.load(q_ptrs, mask=offs_m[:, None] < N_CTX_Q, other=0.0).to(tl.float32)
     neg_inf = -1.0e6
 
     m_i = tl.zeros([BLOCK_M], dtype=tl.float32) - float("inf")
@@ -675,7 +681,7 @@ def _spatten_fused_ultimate_causal_autotuned_kernel(
             max_score = tl.max(qk)
             if max_score < quant_threshold:
                 k_lsb_ptrs = k_lsb_base + offs_n_curr[:, None] * stride_kn + offs_d[None, :] * stride_kk
-                k_lsb = tl.load(k_lsb_ptrs, mask=offs_n_curr[:, None] < N_CTX_K, other=0.0)
+                k_lsb = tl.load(k_lsb_ptrs, mask=offs_n_curr[:, None] < N_CTX_K, other=0.0).to(tl.float32)
                 qk_lsb = tl.dot(qi, tl.trans(k_lsb)) * sm_scale
                 qk = tl.where(valid, qk + qk_lsb, neg_inf)
 
@@ -855,6 +861,14 @@ class SpattenQwen3Attention(Qwen3Attention):
         self.next_active_token_indices = None
         self.active_head_indices_for_this_layer = None
         self.next_active_head_indices = None
+        self.enable_cache_aware_head_reuse = True
+        self.cached_incoming_head_indices = None
+        self.cached_next_head_indices = None
+        self.enable_decode_fast_path = True
+        self.decode_disable_progressive_quant = True
+        self.enable_cache_aware_kv_prune = True
+        self.enable_prefill_sdpa_fast_path = False
+        self.enable_gqa_active_qkv_prefill = True
         self.progressive_qk_meta = None
         self.v_prune_meta = None
         self.ultimate_meta = None
@@ -862,6 +876,174 @@ class SpattenQwen3Attention(Qwen3Attention):
         self.token_block_size = 0
         self.token_recent_keep = 128
         self.token_prefix_keep = 1
+        self._cached_qkv_active_indices = None
+        self._cached_qkv_weights = None
+        self._cached_o_active_indices = None
+        self._cached_o_slice = None
+
+    def _expand_kv_for_active_heads(self, key_states, value_states, active_head_indices):
+        if active_head_indices.numel() == self.num_heads:
+            return repeat_kv(key_states, self.num_key_value_groups), repeat_kv(value_states, self.num_key_value_groups)
+
+        if self.num_key_value_groups == 1:
+            return (
+                key_states.index_select(1, active_head_indices),
+                value_states.index_select(1, active_head_indices),
+            )
+
+        kv_head_indices = torch.div(active_head_indices, self.num_key_value_groups, rounding_mode="floor")
+        return (
+            key_states.index_select(1, kv_head_indices),
+            value_states.index_select(1, kv_head_indices),
+        )
+
+    def _align_attention_mask_for_qk(self, attention_mask, q_len, k_len):
+        if attention_mask is None:
+            return None
+        aligned = attention_mask
+        if aligned.dim() >= 2 and aligned.size(-2) != q_len:
+            aligned = aligned[..., -q_len:, :]
+        if aligned.dim() >= 1 and aligned.size(-1) != k_len:
+            aligned = aligned[..., -k_len:]
+        return aligned
+
+    def _align_attention_mask_for_scores(self, attention_mask, attn_scores):
+        return self._align_attention_mask_for_qk(
+            attention_mask,
+            attn_scores.size(-2),
+            attn_scores.size(-1),
+        )
+
+    def _prefill_sdpa_fast_path(self, query_states, key_states, value_states, attention_mask):
+        aligned_mask = self._align_attention_mask_for_qk(
+            attention_mask,
+            query_states.size(-2),
+            key_states.size(-2),
+        )
+        return F.scaled_dot_product_attention(
+            query_states,
+            key_states,
+            value_states,
+            attn_mask=aligned_mask,
+            dropout_p=0.0,
+            is_causal=False,
+        )
+
+    def _decode_dense_fast_path(self, query_states, key_states, value_states, attention_mask):
+        attn_scores = torch.matmul(query_states, key_states.transpose(2, 3)) * self.scaling
+        aligned_mask = self._align_attention_mask_for_scores(attention_mask, attn_scores)
+        if aligned_mask is not None:
+            attn_scores = attn_scores + aligned_mask
+        attn_probs = torch.softmax(attn_scores, dim=-1, dtype=torch.float32).to(query_states.dtype)
+        return torch.matmul(attn_probs, value_states)
+
+    def _decode_v_prune_fast_path(self, query_states, key_states, value_states, attention_mask):
+        attn_scores = torch.matmul(query_states, key_states.transpose(2, 3)) * self.scaling
+        aligned_mask = self._align_attention_mask_for_scores(attention_mask, attn_scores)
+        if aligned_mask is not None:
+            attn_scores = attn_scores + aligned_mask
+        attn_probs = torch.softmax(attn_scores, dim=-1, dtype=torch.float32).to(query_states.dtype)
+        pruned_probs = torch.where(attn_probs > self.v_threshold, attn_probs, torch.zeros_like(attn_probs))
+        keep_any = pruned_probs.sum(dim=-1, keepdim=True) > 0
+        max_idx = torch.argmax(attn_probs, dim=-1, keepdim=True)
+        fallback = torch.zeros_like(attn_probs).scatter_(-1, max_idx, attn_probs.gather(-1, max_idx))
+        effective_probs = torch.where(keep_any, pruned_probs, fallback)
+        return torch.matmul(effective_probs, value_states)
+
+    def _project_active_heads_output(self, context_layer, active_head_indices, input_shape, hidden_states_dtype):
+        compact_context = context_layer.transpose(1, 2).reshape(*input_shape, -1).contiguous()
+        _, sliced_weight = self._get_or_build_o_proj_slice(active_head_indices)
+        return F.linear(compact_context, sliced_weight, self.o_proj.bias).to(hidden_states_dtype)
+
+    def _get_or_build_qkv_weights(self, active_head_indices):
+        if (
+            self._cached_qkv_active_indices is not None
+            and self._cached_qkv_active_indices.shape == active_head_indices.shape
+            and torch.equal(self._cached_qkv_active_indices, active_head_indices)
+            and self._cached_qkv_weights is not None
+        ):
+            return self._cached_qkv_weights
+
+        packed_weight, packed_bias = slice_qkv_weights(
+            self.q_proj,
+            self.k_proj,
+            self.v_proj,
+            active_head_indices,
+            self.num_heads,
+            self.head_dim,
+        )
+        proj_dim = active_head_indices.numel() * self.head_dim
+        self._cached_qkv_active_indices = active_head_indices.detach().clone()
+        self._cached_qkv_weights = (packed_weight, packed_bias, proj_dim)
+        return self._cached_qkv_weights
+
+    def _get_or_build_o_proj_slice(self, active_head_indices):
+        if (
+            self._cached_o_active_indices is not None
+            and self._cached_o_active_indices.shape == active_head_indices.shape
+            and torch.equal(self._cached_o_active_indices, active_head_indices)
+            and self._cached_o_slice is not None
+        ):
+            return self._cached_o_slice
+
+        head_offsets = torch.arange(self.head_dim, device=active_head_indices.device)
+        input_indices = (active_head_indices[:, None] * self.head_dim + head_offsets[None, :]).reshape(-1)
+        sliced_weight = self.o_proj.weight.index_select(1, input_indices)
+        self._cached_o_active_indices = active_head_indices.detach().clone()
+        self._cached_o_slice = (input_indices, sliced_weight)
+        return self._cached_o_slice
+
+    def _project_active_qkv(self, hidden_states, hidden_shape, active_head_indices):
+        packed_weight, packed_bias, proj_dim = self._get_or_build_qkv_weights(active_head_indices)
+        qkv_proj = F.linear(hidden_states, packed_weight, packed_bias)
+        q_proj, k_proj, v_proj = torch.split(qkv_proj, proj_dim, dim=-1)
+
+        active_hidden_shape = (*hidden_shape[:-2], active_head_indices.numel(), self.head_dim)
+        query_states = self.q_norm(q_proj.view(active_hidden_shape)).transpose(1, 2)
+        key_states = self.k_norm(k_proj.view(active_hidden_shape)).transpose(1, 2)
+        value_states = v_proj.view(active_hidden_shape).transpose(1, 2)
+        return query_states, key_states, value_states
+
+    def _project_active_qkv_gqa_prefill(self, hidden_states, hidden_shape, active_head_indices):
+        q_weight, q_bias = slice_linear_weights(
+            self.q_proj,
+            active_head_indices,
+            self.num_heads,
+            self.head_dim,
+        )
+
+        kv_head_indices = torch.div(active_head_indices, self.num_key_value_groups, rounding_mode="floor")
+        kv_active_indices = torch.unique(kv_head_indices, sorted=True)
+        kv_heads_total = self.k_proj.out_features // self.head_dim
+
+        k_weight, k_bias = slice_linear_weights(
+            self.k_proj,
+            kv_active_indices,
+            kv_heads_total,
+            self.head_dim,
+        )
+        v_weight, v_bias = slice_linear_weights(
+            self.v_proj,
+            kv_active_indices,
+            kv_heads_total,
+            self.head_dim,
+        )
+
+        q_proj = F.linear(hidden_states, q_weight, q_bias)
+        k_proj = F.linear(hidden_states, k_weight, k_bias)
+        v_proj = F.linear(hidden_states, v_weight, v_bias)
+
+        active_hidden_shape = (*hidden_shape[:-2], active_head_indices.numel(), self.head_dim)
+        active_kv_shape = (*hidden_shape[:-2], kv_active_indices.numel(), self.head_dim)
+        query_states = self.q_norm(q_proj.view(active_hidden_shape)).transpose(1, 2)
+        key_states_kv = self.k_norm(k_proj.view(active_kv_shape)).transpose(1, 2)
+        value_states_kv = v_proj.view(active_kv_shape).transpose(1, 2)
+
+        # Expand compact KV heads back to active query-head layout.
+        kv_positions = torch.searchsorted(kv_active_indices, kv_head_indices)
+        key_states = key_states_kv.index_select(1, kv_positions)
+        value_states = value_states_kv.index_select(1, kv_positions)
+        return query_states, key_states, value_states
 
     def forward(
         self,
@@ -873,10 +1055,43 @@ class SpattenQwen3Attention(Qwen3Attention):
     ):
         input_shape = hidden_states.shape[:-1]
         hidden_shape = (*input_shape, -1, self.head_dim)
+        is_decode_step = past_key_values is not None and hidden_states.shape[1] == 1
 
-        query_states = self.q_norm(self.q_proj(hidden_states).view(hidden_shape)).transpose(1, 2)
-        key_states = self.k_norm(self.k_proj(hidden_states).view(hidden_shape)).transpose(1, 2)
-        value_states = self.v_proj(hidden_states).view(hidden_shape).transpose(1, 2)
+        if self.active_head_indices_for_this_layer is not None:
+            active_head_indices = self.active_head_indices_for_this_layer
+        elif is_decode_step and self.enable_cache_aware_head_reuse and self.cached_incoming_head_indices is not None:
+            active_head_indices = self.cached_incoming_head_indices
+        else:
+            active_head_indices = torch.arange(self.num_heads, device=hidden_states.device)
+        cur_heads = active_head_indices.numel()
+
+        use_active_qkv_projection = (
+            cur_heads != self.num_heads
+            and self.num_key_value_groups == 1
+        )
+        use_active_gqa_qkv_projection = (
+            cur_heads != self.num_heads
+            and self.num_key_value_groups > 1
+            and past_key_values is None
+            and self.enable_gqa_active_qkv_prefill
+        )
+
+        if use_active_qkv_projection:
+            query_states, key_states, value_states = self._project_active_qkv(
+                hidden_states,
+                hidden_shape,
+                active_head_indices,
+            )
+        elif use_active_gqa_qkv_projection:
+            query_states, key_states, value_states = self._project_active_qkv_gqa_prefill(
+                hidden_states,
+                hidden_shape,
+                active_head_indices,
+            )
+        else:
+            query_states = self.q_norm(self.q_proj(hidden_states).view(hidden_shape)).transpose(1, 2)
+            key_states = self.k_norm(self.k_proj(hidden_states).view(hidden_shape)).transpose(1, 2)
+            value_states = self.v_proj(hidden_states).view(hidden_shape).transpose(1, 2)
 
         cos, sin = position_embeddings
         query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin)
@@ -884,21 +1099,52 @@ class SpattenQwen3Attention(Qwen3Attention):
         if past_key_values is not None:
             key_states, value_states = past_key_values.update(key_states, value_states, self.layer_idx)
 
-        key_states = repeat_kv(key_states, self.num_key_value_groups)
-        value_states = repeat_kv(value_states, self.num_key_value_groups)
-
-        if self.active_head_indices_for_this_layer is not None:
-            active_head_indices = self.active_head_indices_for_this_layer
+        kv_already_compacted_for_active_heads = False
+        if use_active_gqa_qkv_projection:
+            kv_already_compacted_for_active_heads = True
+        elif is_decode_step and self.enable_cache_aware_kv_prune:
+            key_states, value_states = self._expand_kv_for_active_heads(
+                key_states,
+                value_states,
+                active_head_indices,
+            )
+            kv_already_compacted_for_active_heads = active_head_indices.numel() != self.num_heads
         else:
-            active_head_indices = torch.arange(self.num_heads, device=hidden_states.device)
-        cur_heads = active_head_indices.numel()
+            key_states = repeat_kv(key_states, self.num_key_value_groups)
+            value_states = repeat_kv(value_states, self.num_key_value_groups)
 
-        if cur_heads != self.num_heads:
+        if self.enable_cache_aware_head_reuse and not is_decode_step:
+            self.cached_incoming_head_indices = active_head_indices.detach().clone()
+
+        if cur_heads != self.num_heads and not use_active_qkv_projection and not use_active_gqa_qkv_projection:
             query_states = query_states.index_select(1, active_head_indices)
-            key_states = key_states.index_select(1, active_head_indices)
-            value_states = value_states.index_select(1, active_head_indices)
+            if not kv_already_compacted_for_active_heads:
+                key_states = key_states.index_select(1, active_head_indices)
+                value_states = value_states.index_select(1, active_head_indices)
 
-        if self.enable_prog_quant and self.enable_v_prune:
+        if is_decode_step and self.enable_decode_fast_path:
+            if self.enable_v_prune:
+                context_layer = self._decode_v_prune_fast_path(
+                    query_states,
+                    key_states,
+                    value_states,
+                    attention_mask,
+                )
+            else:
+                context_layer = self._decode_dense_fast_path(
+                    query_states,
+                    key_states,
+                    value_states,
+                    attention_mask,
+                )
+        elif self.enable_prefill_sdpa_fast_path:
+            context_layer = self._prefill_sdpa_fast_path(
+                query_states,
+                key_states,
+                value_states,
+                attention_mask,
+            )
+        elif self.enable_prog_quant and self.enable_v_prune:
             k_msb, k_lsb = prepare_progressive_k_bf16_msb(key_states)
             context_layer = triton_fused_spatten_ultimate_causal(
                 query_states,
@@ -941,25 +1187,34 @@ class SpattenQwen3Attention(Qwen3Attention):
             attn_output = torch.matmul(attn_weights, value_states)
             context_layer = attn_output
 
-        current_token_importance = context_layer.abs().mean(dim=(1, 3))
-        head_importance = context_layer.abs().mean(dim=(0, 2, 3))
+        current_token_importance = None
+        if self.enable_token_prune and self.token_prune_num > 0:
+            current_token_importance = context_layer.abs().mean(dim=(1, 3))
+
         next_head_indices = active_head_indices
-        head_prune_active = (
-            self.enable_head_prune
-            and self.layer_idx >= self.head_prune_start_layer
-            and ((self.layer_idx - self.head_prune_start_layer) % max(1, self.head_prune_interval) == 0)
-        )
-        if head_prune_active and cur_heads > self.head_prune_num:
-            if self.head_prune_num == 1:
-                drop_idx = torch.argmin(head_importance)
-                keep_mask = torch.ones(cur_heads, device=hidden_states.device, dtype=torch.bool)
-                keep_mask[drop_idx] = False
-                next_head_indices = active_head_indices[keep_mask]
-            else:
-                keep_k = max(1, cur_heads - self.head_prune_num)
-                _, topk_indices = torch.topk(head_importance, k=keep_k)
-                next_head_indices = torch.sort(active_head_indices[topk_indices]).values
+        if is_decode_step and self.enable_cache_aware_head_reuse and self.cached_next_head_indices is not None:
+            next_head_indices = self.cached_next_head_indices
+        else:
+            head_prune_active = (
+                self.enable_head_prune
+                and self.layer_idx >= self.head_prune_start_layer
+                and ((self.layer_idx - self.head_prune_start_layer) % max(1, self.head_prune_interval) == 0)
+            )
+            if head_prune_active and cur_heads > self.head_prune_num:
+                head_importance = context_layer.abs().mean(dim=(0, 2, 3))
+                if self.head_prune_num == 1:
+                    drop_idx = torch.argmin(head_importance)
+                    keep_mask = torch.ones(cur_heads, device=hidden_states.device, dtype=torch.bool)
+                    keep_mask[drop_idx] = False
+                    next_head_indices = active_head_indices[keep_mask]
+                else:
+                    keep_k = max(1, cur_heads - self.head_prune_num)
+                    _, topk_indices = torch.topk(head_importance, k=keep_k)
+                    next_head_indices = torch.sort(active_head_indices[topk_indices]).values
+
         self.next_active_head_indices = next_head_indices
+        if self.enable_cache_aware_head_reuse and not is_decode_step:
+            self.cached_next_head_indices = next_head_indices.detach().clone()
 
         if not self.enable_token_prune or self.token_prune_num <= 0:
             self.next_active_token_indices = None
@@ -1035,17 +1290,16 @@ class SpattenQwen3Attention(Qwen3Attention):
                 self.cumulative_token_score = None
             self.next_active_token_indices = next_token_indices
 
-        full_context = torch.zeros(
-            input_shape[0],
-            input_shape[1],
-            self.num_heads,
-            self.head_dim,
-            device=hidden_states.device,
-            dtype=hidden_states.dtype,
-        )
-        full_context[:, :, active_head_indices, :] = context_layer.transpose(1, 2)
-        attn_output = full_context.reshape(*input_shape, -1).contiguous()
-        attn_output = self.o_proj(attn_output)
+        if cur_heads == self.num_heads:
+            attn_output = context_layer.transpose(1, 2).reshape(*input_shape, -1).contiguous()
+            attn_output = self.o_proj(attn_output)
+        else:
+            attn_output = self._project_active_heads_output(
+                context_layer,
+                active_head_indices,
+                input_shape,
+                hidden_states.dtype,
+            )
         return attn_output, None
 
 
@@ -1066,14 +1320,17 @@ def configure_spatten_qwen3_model(
     token_recent_keep=128,
     token_prefix_keep=1,
     enable_triton_autotune=False,
+    enable_prefill_sdpa_fast_path=False,
     meta_overrides=None,
 ):
     model = copy.deepcopy(base_model)
     device = next(base_model.parameters()).device
+    dtype = next(base_model.parameters()).dtype
     for layer_idx, layer in enumerate(model.layers):
         orig_state = layer.self_attn.state_dict()
         new_attn = SpattenQwen3Attention(model.config, layer_idx=layer_idx)
         new_attn.load_state_dict(orig_state)
+        new_attn = new_attn.to(device=device, dtype=dtype)
         new_attn.enable_prog_quant = mode in {"quant_only", "full"}
         new_attn.enable_v_prune = mode in {"v_prune_only", "full"}
         new_attn.quant_threshold = quant_threshold
@@ -1090,13 +1347,14 @@ def configure_spatten_qwen3_model(
         new_attn.token_recent_keep = token_recent_keep
         new_attn.token_prefix_keep = token_prefix_keep
         new_attn.enable_triton_autotune = enable_triton_autotune
+        new_attn.enable_prefill_sdpa_fast_path = enable_prefill_sdpa_fast_path
         if meta_overrides:
             new_attn.progressive_qk_meta = meta_overrides.get("progressive_qk")
             new_attn.v_prune_meta = meta_overrides.get("v_prune")
             new_attn.ultimate_meta = meta_overrides.get("ultimate")
         layer.self_attn = new_attn
     model.forward = spatten_qwen3_model_forward.__get__(model, Qwen3Model)
-    return model.to(device).float().eval()
+    return model.to(device=device, dtype=dtype).eval()
 
 
 def spatten_qwen3_model_forward(
@@ -1109,7 +1367,9 @@ def spatten_qwen3_model_forward(
     use_cache=None,
     **kwargs,
 ):
-    if use_cache and any(getattr(layer.self_attn, "enable_token_prune", False) for layer in self.layers):
+    token_prune_enabled = any(getattr(layer.self_attn, "enable_token_prune", False) for layer in self.layers)
+
+    if use_cache and token_prune_enabled:
         raise ValueError("Qwen3 minimal token pruning currently supports prefill-only execution (use_cache=False).")
 
     if (input_ids is None) ^ (inputs_embeds is not None):
@@ -1130,9 +1390,10 @@ def spatten_qwen3_model_forward(
     active_head_indices = None
     active_token_indices = None
     cumulative_token_score = None
+    is_decode_step = use_cache and past_key_values is not None and hidden_states.shape[1] == 1
 
     if isinstance(attention_mask, dict):
-        if any(getattr(layer.self_attn, "enable_token_prune", False) for layer in self.layers):
+        if token_prune_enabled:
             raise ValueError("Qwen3 token pruning does not support dict attention_mask inputs in the current minimal path.")
         base_attention_mask = attention_mask
     else:
@@ -1143,6 +1404,24 @@ def spatten_qwen3_model_forward(
                 device=hidden_states.device,
                 dtype=torch.long,
             )
+
+    static_causal_mask_mapping = None
+    static_position_embeddings = None
+    if not token_prune_enabled:
+        static_position_embeddings = self.rotary_emb(hidden_states, position_ids)
+        if isinstance(base_attention_mask, dict):
+            static_causal_mask_mapping = base_attention_mask
+        else:
+            mask_kwargs = {
+                "config": self.config,
+                "inputs_embeds": hidden_states,
+                "attention_mask": base_attention_mask,
+                "past_key_values": past_key_values,
+                "position_ids": position_ids,
+            }
+            static_causal_mask_mapping = {"full_attention": create_causal_mask(**mask_kwargs)}
+            if self.has_sliding_layers:
+                static_causal_mask_mapping["sliding_attention"] = create_sliding_window_causal_mask(**mask_kwargs)
 
     def _gather_2d(source, keep_indices):
         expanded = keep_indices.unsqueeze(-1).expand(-1, -1, source.size(-1))
@@ -1161,7 +1440,9 @@ def spatten_qwen3_model_forward(
                 base_attention_mask = _gather_2d(base_attention_mask.unsqueeze(-1), active_token_indices).squeeze(-1)
             active_token_indices = None
 
-        if isinstance(base_attention_mask, dict):
+        if static_causal_mask_mapping is not None:
+            causal_mask_mapping = static_causal_mask_mapping
+        elif isinstance(base_attention_mask, dict):
             causal_mask_mapping = base_attention_mask
         else:
             mask_kwargs = {
@@ -1175,8 +1456,14 @@ def spatten_qwen3_model_forward(
             if self.has_sliding_layers:
                 causal_mask_mapping["sliding_attention"] = create_sliding_window_causal_mask(**mask_kwargs)
 
-        position_embeddings = self.rotary_emb(hidden_states, position_ids)
-        decoder_layer.self_attn.active_head_indices_for_this_layer = active_head_indices
+        if static_position_embeddings is not None:
+            position_embeddings = static_position_embeddings
+        else:
+            position_embeddings = self.rotary_emb(hidden_states, position_ids)
+        if is_decode_step and getattr(decoder_layer.self_attn, "enable_cache_aware_head_reuse", False):
+            decoder_layer.self_attn.active_head_indices_for_this_layer = None
+        else:
+            decoder_layer.self_attn.active_head_indices_for_this_layer = active_head_indices
         decoder_layer.self_attn.cumulative_token_score = cumulative_token_score
         hidden_states = decoder_layer(
             hidden_states,
@@ -1187,7 +1474,7 @@ def spatten_qwen3_model_forward(
             use_cache=use_cache,
             **kwargs,
         )
-        active_head_indices = decoder_layer.self_attn.next_active_head_indices
+        active_head_indices = None if is_decode_step else decoder_layer.self_attn.next_active_head_indices
         active_token_indices = decoder_layer.self_attn.next_active_token_indices
         cumulative_token_score = decoder_layer.self_attn.cumulative_token_score
 

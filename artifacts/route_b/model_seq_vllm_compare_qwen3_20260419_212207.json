@@ -1,0 +1,37 @@
+{
+  "timestamp": "20260419_212207",
+  "device": "NVIDIA GeForce RTX 3090",
+  "model_name": "/root/autodl-tmp/models/Qwen3-0.6B-ms",
+  "metric": "prefill_plus_1_token_generation_latency_ms",
+  "seq_lens": [
+    1024,
+    2048,
+    4096,
+    8192
+  ],
+  "warmup": 5,
+  "iters": 10,
+  "gpu_memory_utilization": 0.6,
+  "results": {
+    "1024": {
+      "hf_generate_ms": 43.466452,
+      "vllm_ms": 7.704117,
+      "vllm_speedup_vs_hf": 5.641977
+    },
+    "2048": {
+      "hf_generate_ms": 65.580981,
+      "vllm_ms": 10.517062,
+      "vllm_speedup_vs_hf": 6.235675
+    },
+    "4096": {
+      "hf_generate_ms": 138.300354,
+      "vllm_ms": 17.748275,
+      "vllm_speedup_vs_hf": 7.792327
+    },
+    "8192": {
+      "hf_generate_ms": 326.560229,
+      "vllm_ms": 26.987243,
+      "vllm_speedup_vs_hf": 12.100541
+    }
+  }
+}

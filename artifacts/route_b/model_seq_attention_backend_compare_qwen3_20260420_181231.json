@@ -1,0 +1,159 @@
+{
+  "timestamp": "20260420_181231",
+  "device": "NVIDIA GeForce RTX 3090",
+  "model_name": "/root/autodl-tmp/models/Qwen3-0.6B-ms",
+  "base_model_source": "local pretrained: /root/autodl-tmp/models/Qwen3-0.6B-ms (eager)",
+  "seq_lens": [
+    1024,
+    2048,
+    4096,
+    8192
+  ],
+  "warmup": 10,
+  "iters": 30,
+  "allow_local_pretrained": true,
+  "quant_threshold": 0.01,
+  "v_threshold": 0.05,
+  "enable_head_prune": true,
+  "head_prune_num": 1,
+  "head_prune_start_layer": 0,
+  "head_prune_interval": 1,
+  "results": [
+    {
+      "seq_len": 1024,
+      "dense": {
+        "dense_eager": {
+          "ms": 55.592106,
+          "model_source": "local pretrained: /root/autodl-tmp/models/Qwen3-0.6B-ms (eager)",
+          "input_source": "synthetic exact-length token ids (seq_len=1024)"
+        },
+        "dense_sdpa": {
+          "ms": 47.056726,
+          "model_source": "local pretrained: /root/autodl-tmp/models/Qwen3-0.6B-ms (sdpa)",
+          "input_source": "synthetic exact-length token ids (seq_len=1024)"
+        },
+        "dense_flash": {
+          "ms": null,
+          "error": "FlashAttention2 has been toggled on, but it cannot be used due to the following error: the package for FlashAttention2 doesn't seem to be installed."
+        }
+      },
+      "spatten": {
+        "spatten_quant": {
+          "ms": 79.667578,
+          "input_source": "synthetic exact-length token ids (seq_len=1024)"
+        },
+        "spatten_v": {
+          "ms": 79.557259,
+          "input_source": "synthetic exact-length token ids (seq_len=1024)"
+        },
+        "spatten_full": {
+          "ms": 80.719124,
+          "input_source": "synthetic exact-length token ids (seq_len=1024)"
+        }
+      },
+      "best_variant": "dense_sdpa"
+    },
+    {
+      "seq_len": 2048,
+      "dense": {
+        "dense_eager": {
+          "ms": 142.382764,
+          "model_source": "local pretrained: /root/autodl-tmp/models/Qwen3-0.6B-ms (eager)",
+          "input_source": "synthetic exact-length token ids (seq_len=2048)"
+        },
+        "dense_sdpa": {
+          "ms": 63.118949,
+          "model_source": "local pretrained: /root/autodl-tmp/models/Qwen3-0.6B-ms (sdpa)",
+          "input_source": "synthetic exact-length token ids (seq_len=2048)"
+        },
+        "dense_flash": {
+          "ms": null,
+          "error": "FlashAttention2 has been toggled on, but it cannot be used due to the following error: the package for FlashAttention2 doesn't seem to be installed."
+        }
+      },
+      "spatten": {
+        "spatten_quant": {
+          "ms": 144.232861,
+          "input_source": "synthetic exact-length token ids (seq_len=2048)"
+        },
+        "spatten_v": {
+          "ms": 142.413477,
+          "input_source": "synthetic exact-length token ids (seq_len=2048)"
+        },
+        "spatten_full": {
+          "ms": 147.389648,
+          "input_source": "synthetic exact-length token ids (seq_len=2048)"
+        }
+      },
+      "best_variant": "dense_sdpa"
+    },
+    {
+      "seq_len": 4096,
+      "dense": {
+        "dense_eager": {
+          "ms": 397.862467,
+          "model_source": "local pretrained: /root/autodl-tmp/models/Qwen3-0.6B-ms (eager)",
+          "input_source": "synthetic exact-length token ids (seq_len=4096)"
+        },
+        "dense_sdpa": {
+          "ms": 137.451937,
+          "model_source": "local pretrained: /root/autodl-tmp/models/Qwen3-0.6B-ms (sdpa)",
+          "input_source": "synthetic exact-length token ids (seq_len=4096)"
+        },
+        "dense_flash": {
+          "ms": null,
+          "error": "FlashAttention2 has been toggled on, but it cannot be used due to the following error: the package for FlashAttention2 doesn't seem to be installed."
+        }
+      },
+      "spatten": {
+        "spatten_quant": {
+          "ms": 289.422917,
+          "input_source": "synthetic exact-length token ids (seq_len=4096)"
+        },
+        "spatten_v": {
+          "ms": 282.250033,
+          "input_source": "synthetic exact-length token ids (seq_len=4096)"
+        },
+        "spatten_full": {
+          "ms": 301.596615,
+          "input_source": "synthetic exact-length token ids (seq_len=4096)"
+        }
+      },
+      "best_variant": "dense_sdpa"
+    },
+    {
+      "seq_len": 8192,
+      "dense": {
+        "dense_eager": {
+          "ms": 1321.496745,
+          "model_source": "local pretrained: /root/autodl-tmp/models/Qwen3-0.6B-ms (eager)",
+          "input_source": "synthetic exact-length token ids (seq_len=8192)"
+        },
+        "dense_sdpa": {
+          "ms": 330.162565,
+          "model_source": "local pretrained: /root/autodl-tmp/models/Qwen3-0.6B-ms (sdpa)",
+          "input_source": "synthetic exact-length token ids (seq_len=8192)"
+        },
+        "dense_flash": {
+          "ms": null,
+          "error": "FlashAttention2 has been toggled on, but it cannot be used due to the following error: the package for FlashAttention2 doesn't seem to be installed."
+        }
+      },
+      "spatten": {
+        "spatten_quant": {
+          "ms": 643.860156,
+          "input_source": "synthetic exact-length token ids (seq_len=8192)"
+        },
+        "spatten_v": {
+          "ms": 612.189583,
+          "input_source": "synthetic exact-length token ids (seq_len=8192)"
+        },
+        "spatten_full": {
+          "ms": 692.690039,
+          "input_source": "synthetic exact-length token ids (seq_len=8192)"
+        }
+      },
+      "best_variant": "dense_sdpa"
+    }
+  ]
+}

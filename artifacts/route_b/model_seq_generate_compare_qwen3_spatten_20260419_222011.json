@@ -1,0 +1,160 @@
+{
+  "timestamp": "20260419_222011",
+  "device": "NVIDIA GeForce RTX 3090",
+  "model_name": "/root/autodl-tmp/models/Qwen3-0.6B-ms",
+  "metric_template": {
+    "prefill_ms": "Prompt forward latency with use_cache=True",
+    "decode_1tok_ms": "Single cached decode step latency after prefill",
+    "ttft_ms": "Time-to-first-token measured by generate(max_new_tokens=1)",
+    "decode_tok_per_s": "1000 / decode_1tok_ms"
+  },
+  "seq_lens": [
+    1024,
+    2048,
+    4096,
+    8192
+  ],
+  "warmup": 5,
+  "iters": 10,
+  "quant_threshold": 0.01,
+  "v_threshold": 0.05,
+  "enable_head_prune": true,
+  "head_prune_num": 1,
+  "head_prune_start_layer": 0,
+  "head_prune_interval": 1,
+  "gpu_memory_utilization": 0.6,
+  "results": {
+    "1024": {
+      "hf": {
+        "prefill_ms": 43.225394,
+        "decode_1tok_ms": 80.667035,
+        "ttft_ms": 33.691721,
+        "decode_tok_per_s": 12.396638
+      },
+      "vllm": {
+        "ttft_ms": 10.081674,
+        "prefill_ms": null,
+        "decode_1tok_ms": null,
+        "decode_tok_per_s": null
+      },
+      "spatten_quant": {
+        "prefill_ms": 82.252081,
+        "decode_1tok_ms": 115.993298,
+        "ttft_ms": 61.991003,
+        "decode_tok_per_s": 8.621188
+      },
+      "spatten_v": {
+        "prefill_ms": 61.337085,
+        "decode_1tok_ms": 147.199585,
+        "ttft_ms": 59.933301,
+        "decode_tok_per_s": 6.793497
+      },
+      "spatten_full": {
+        "prefill_ms": 61.590326,
+        "decode_1tok_ms": 150.79209,
+        "ttft_ms": 61.806409,
+        "decode_tok_per_s": 6.631648
+      },
+      "best_variant": "vllm"
+    },
+    "2048": {
+      "hf": {
+        "prefill_ms": 71.392047,
+        "decode_1tok_ms": 98.52027,
+        "ttft_ms": 64.890686,
+        "decode_tok_per_s": 10.150196
+      },
+      "vllm": {
+        "ttft_ms": 11.726493,
+        "prefill_ms": null,
+        "decode_1tok_ms": null,
+        "decode_tok_per_s": null
+      },
+      "spatten_quant": {
+        "prefill_ms": 84.351178,
+        "decode_1tok_ms": 135.40188,
+        "ttft_ms": 78.603558,
+        "decode_tok_per_s": 7.385422
+      },
+      "spatten_v": {
+        "prefill_ms": 80.104651,
+        "decode_1tok_ms": 130.087634,
+        "ttft_ms": 74.217938,
+        "decode_tok_per_s": 7.687126
+      },
+      "spatten_full": {
+        "prefill_ms": 83.484979,
+        "decode_1tok_ms": 136.308118,
+        "ttft_ms": 77.651801,
+        "decode_tok_per_s": 7.33632
+      },
+      "best_variant": "vllm"
+    },
+    "4096": {
+      "hf": {
+        "prefill_ms": 153.174329,
+        "decode_1tok_ms": 189.785291,
+        "ttft_ms": 139.402161,
+        "decode_tok_per_s": 5.269112
+      },
+      "vllm": {
+        "ttft_ms": 17.172097,
+        "prefill_ms": null,
+        "decode_1tok_ms": null,
+        "decode_tok_per_s": null
+      },
+      "spatten_quant": {
+        "prefill_ms": 176.599854,
+        "decode_1tok_ms": 228.468018,
+        "ttft_ms": 160.998303,
+        "decode_tok_per_s": 4.37698
+      },
+      "spatten_v": {
+        "prefill_ms": 164.713989,
+        "decode_1tok_ms": 213.909302,
+        "ttft_ms": 149.897327,
+        "decode_tok_per_s": 4.674879
+      },
+      "spatten_full": {
+        "prefill_ms": 174.757068,
+        "decode_1tok_ms": 227.296655,
+        "ttft_ms": 161.243201,
+        "decode_tok_per_s": 4.399537
+      },
+      "best_variant": "vllm"
+    },
+    "8192": {
+      "hf": {
+        "prefill_ms": 361.935571,
+        "decode_1tok_ms": 388.221436,
+        "ttft_ms": 328.448486,
+        "decode_tok_per_s": 2.57585
+      },
+      "vllm": {
+        "ttft_ms": 25.693942,
+        "prefill_ms": null,
+        "decode_1tok_ms": null,
+        "decode_tok_per_s": null
+      },
+      "spatten_quant": {
+        "prefill_ms": 415.89209,
+        "decode_1tok_ms": 468.845264,
+        "ttft_ms": 385.30979,
+        "decode_tok_per_s": 2.1329
+      },
+      "spatten_v": {
+        "prefill_ms": 375.259644,
+        "decode_1tok_ms": 424.527979,
+        "ttft_ms": 342.952563,
+        "decode_tok_per_s": 2.355557
+      },
+      "spatten_full": {
+        "prefill_ms": 412.035986,
+        "decode_1tok_ms": 464.555713,
+        "ttft_ms": 379.932275,
+        "decode_tok_per_s": 2.152594
+      },
+      "best_variant": "vllm"
+    }
+  }
+}

@@ -56,6 +56,12 @@ def reset_spatten_states(model):
                 attn.next_active_head_indices = None
             if hasattr(attn, "active_head_indices_for_this_layer"):
                 attn.active_head_indices_for_this_layer = None
+            if hasattr(attn, "cached_incoming_head_indices"):
+                attn.cached_incoming_head_indices = None
+            if hasattr(attn, "cached_next_head_indices"):
+                attn.cached_next_head_indices = None
+            if hasattr(attn, "cached_compacted_kv_head_indices"):
+                attn.cached_compacted_kv_head_indices = None
             if hasattr(attn, "cumulative_token_score"):
                 attn.cumulative_token_score = None
             if hasattr(attn, "next_active_token_indices"):

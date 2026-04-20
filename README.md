@@ -1,216 +1,102 @@
 # SpAtten on General GPU
 
-面向长上下文的稀疏注意力加速机制研究项目。
+面向长序列场景的稀疏注意力加速项目。  
+本项目以毕业设计为背景，目标是在通用 GPU 上把“逻辑稀疏”转化为“可测量的真实加速”，并验证该方法在 BERT（encoder-only）与 Qwen3（decoder-only）上的泛化能力。当前主线聚焦注意力计算本身，不把调度系统与 KV cache 管理作为主要贡献点。
 
-本项目围绕毕业设计课题展开，目标是在通用 GPU 上实现并优化稀疏注意力机制，使其在长上下文场景下获得真实、可测量的端到端加速收益。项目以 `PyTorch + Triton` 为主要技术栈，围绕 `SpAtten` 思想构建了一套从模型改造、级联剪枝、底层算子优化到实验验证的完整实现。
+## 项目定位
 
-## Overview
+我们关注的核心问题不是“能不能剪”，而是“剪完之后能不能真快”。围绕这一点，项目构建了从模型改造、级联剪枝、Triton 内核实现到序列级 benchmark 的完整闭环，并持续将对比口径收敛到长序列注意力路径，以保证结果可解释、可复现、可用于论文主结论。
 
-本项目关注的问题是：Transformer 在长上下文场景下面临注意力计算复杂度高、显存访问压力大、很多稀疏方法难以在通用 GPU 上转化为真实收益等问题。因此，本项目的重点不是单纯复现稀疏注意力算法，而是研究如何把逻辑稀疏转化为真实的计算与访存下降，并验证该方法是否能够从 BERT 这类 encoder-only 模型泛化到 Qwen3 这类 decoder-only 模型。
+## 技术亮点（创新点合并）
 
-## Technical Route
+本项目的技术亮点在于将模型层动态稀疏策略与算子层执行优化联合设计：在模型层引入 progressive quantization、V-prune、head pruning 并做层间状态传递，在内核层使用 Triton 实现因果注意力相关路径，把“理论稀疏”变成“计算与访存都减少”的物理收益；同时通过 BERT 与 Qwen3 两条主线交叉验证，证明该方法并非只对单一架构有效，而是可迁移到 decoder-only 的长序列场景并保持稳定收益。
 
-项目整体采用“上层动态控制 + 下层算子优化”的协同路线。在模型层，通过对 BERT 与 Qwen3 的注意力模块进行 Monkey Patching，引入级联 `Head pruning`、级联 `Token pruning` 以及跨层状态传递机制；在底层实现上，通过 Triton 编写并优化 `progressive quantization`、`local V pruning` 与 `full fused SpAtten` 等路径，使模型层的稀疏性能真正转化为物理收益。整个项目通过 benchmark、模型级消融、序列长度 sweep、参数扫描和图化对比等实验方式不断收敛主线。
+## 主线进展
 
-## Highlights
+- 完成 BERT 主线：BF16-MSB 路线、量化与剪枝协同、模型级与序列级消融。
+- 完成 Qwen3 泛化：causal attention、GQA、RoPE、use_cache 路径适配。
+- 收敛主实验口径：从 generate 全链路回到 attention backend 对比，专注长序列注意力加速。
 
-本项目的技术亮点与创新点主要体现在以下几个方面：
+## 核心结果
 
-- 强调“逻辑稀疏到物理收益”的转化，而不是停留在 mask 层面。
-- 将动态剪枝、状态传递与 Triton kernel 优化结合成统一的系统设计。
-- 采用 `BF16-MSB` 路线实现高位/残差量化思路，兼顾论文语义与实际位宽压缩。
-- 在 BERT 上验证完整主线后，进一步扩展到 Qwen3，验证方法的跨架构泛化能力。
-- 针对 decoder-only 模型，继续探索更适合的 token pruning 形式，如 block token pruning 与 recent-window 保留策略。
+### 1) BERT 主线（长序列）
 
-## Core Implementations
-
-### BERT Mainline
-
-当前 BERT 主线基于 `BF16-MSB` 路线实现，核心文件包括：
-
-- `spattn/spatten_bert_bf16_msb.py`
-- `module.py`
-- `benchmark/benchmark_bf16_msb.py`
-- `bench_kernel/model_ablation_bf16_msb.py`
-- `bench_kernel/model_seq_ablation_bf16_msb.py`
-
-主要实现内容包括：
-
-- `progressive quantization`
-- `local V pruning`
-- `cascade head pruning`
-- `cascade token pruning`
-- Triton kernel 优化
-
-### Qwen3 Generalization Branch
-
-为了验证方法的泛化性，项目额外实现了 `Qwen3` 分支，适配了：
-
-- decoder-only
-- causal attention
-- GQA / repeat_kv
-- RoPE
-
-核心文件包括：
-
-- `spattn/spatten_qwen3_bf16_msb.py`
-- `bench_kernel/model_ablation_qwen3_bf16_msb.py`
-- `bench_kernel/model_seq_ablation_qwen3_bf16_msb.py`
-
-## Results
-
-### BERT Mainline Results
-
-在 RTX 3090 上，BERT 主线长上下文结果如下：
-
-| Seq Len | Baseline (ms) | Quant (ms) | V-Prune (ms) | Full (ms) | Best Variant |
+| Seq Len | Baseline (ms) | Quant (ms) | V-Prune (ms) | Full (ms) | Best |
 | --- | ---: | ---: | ---: | ---: | --- |
-| 1024 | 18.03 | 17.89 | 17.31 | 17.83 | `v_prune_only` |
-| 2048 | 45.49 | 31.82 | 31.25 | 31.63 | `v_prune_only` |
-| 4096 | 125.91 | 64.52 | 62.46 | 62.06 | `full` |
-| 8192 | 432.92 | 154.73 | 146.26 | 139.53 | `full` |
+| 1024 | 18.03 | 17.89 | 17.31 | 17.83 | V-Prune |
+| 2048 | 45.49 | 31.82 | 31.25 | 31.63 | V-Prune |
+| 4096 | 125.91 | 64.52 | 62.46 | 62.06 | Full |
+| 8192 | 432.92 | 154.73 | 146.26 | 139.53 | Full |
 
-对应加速比：
+### 2) Qwen3 上的 vLLM baseline 尝试（已纳入对照）
 
-| Seq Len | Full Speedup vs Baseline |
-| --- | ---: |
-| 2048 | `1.44x` |
-| 4096 | `2.03x` |
-| 8192 | `3.10x` |
+测试脚本：`bench_kernel/model_seq_vllm_compare_qwen3.py`  
+评测指标：`prefill + 1 token generation latency (TTFT)`
 
-结论：
+| 配置项 | 值 |
+| --- | --- |
+| model | `/root/autodl-tmp/models/Qwen3-0.6B-ms` |
+| vLLM gpu_memory_utilization | `0.6` |
+| max_model_len | `8200` |
+| chunked prefill | 启用（日志显示 `max_num_batched_tokens=8192`） |
+| prefix caching | 启用 |
 
-- `2048` 时已经出现明显收益。
-- `4096/8192` 时 `full` 路径成为最优主线。
-- 项目已在通用 GPU 上验证了长上下文稀疏注意力的工程可行性。
+| Seq Len | HF-Generate (ms) | vLLM (ms) | Speedup (vLLM) |
+| --- | ---: | ---: | ---: |
+| 1024 | 43.4665 | 7.7041 | 5.64x |
+| 2048 | 65.5810 | 10.5171 | 6.24x |
+| 4096 | 138.3004 | 17.7483 | 7.79x |
+| 8192 | 326.5602 | 26.9872 | 12.10x |
 
-### Compile / Graph Comparison
+> 说明：vLLM 结果反映的是系统级优化（调度、缓存、图捕获等）叠加收益，不能直接等价为“注意力内核本身”的对比结论，因此后续主线改为 attention backend 的同口径对照。
 
-项目还额外比较了 `torch.compile`、`CUDA Graph` 与 graph-safe SpAtten 路径：
+### 3) Qwen3 注意力后端对比（当前主线）
 
-| Seq Len | Eager | Compile | Graph | SpAtten | SpAtten+Graph |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| 1024 | 14.48 | 14.95 | 14.11 | 10.18 | 9.96 |
-| 2048 | 38.76 | 38.84 | 38.65 | 24.19 | 24.05 |
-| 4096 | 111.95 | 111.86 | 112.04 | 53.56 | 53.38 |
-| 8192 | 403.16 | 403.31 | 403.93 | 140.42 | 140.11 |
+测试脚本：`bench_kernel/model_seq_attention_backend_compare_qwen3.py`  
+基线重点：`Dense-SDPA`（主流稠密注意力后端）
 
-结论：
+| Seq Len | Dense-SDPA (ms) | SpAtten Best (ms) | Best Variant | SpBest / SDPA |
+| --- | ---: | ---: | --- | ---: |
+| 1024 | 39.2716 | 43.6746 | Sp-V | 111.2% |
+| 2048 | 62.9569 | 61.5272 | Sp-V | 97.7% |
+| 4096 | 136.7730 | 105.7964 | Sp-V | 77.4% |
+| 8192 | 329.4735 | 230.1167 | Sp-V | 69.8% |
 
-- `torch.compile` 与 `CUDA Graph` 对稳定子路径有帮助。
-- 但当前主收益仍然来自动态稀疏注意力与级联剪枝主线。
+> 结论：在长序列（4096/8192）下，SpAtten 已显著超过 SDPA。
 
-### FFN Graph Experiments
+### 4) 激进开关对比（SDPA prefill fast path）
 
-在当前 SpAtten 主线基础上，项目进一步对 FFN 单独做了 `torch.compile` 与 `CUDA Graph` 测试：
+| Seq Len | Dense-SDPA (ms) | SpAtten Best (ms) | SpBest / SDPA |
+| --- | ---: | ---: | ---: |
+| 1024 | 37.7418 | 42.0040 | 111.3% |
+| 2048 | 63.3164 | 61.8311 | 97.7% |
+| 4096 | 137.7169 | 121.2103 | 88.0% |
+| 8192 | 329.7879 | 302.8387 | 91.8% |
 
-| Seq Len | Baseline | SpAtten | FFN-Compile | FFN-Graph | Best |
-| --- | ---: | ---: | ---: | ---: | --- |
-| 1024 | 14.47 | 15.64 | 15.68 | 15.39 | `baseline` |
-| 2048 | 37.86 | 24.69 | 24.68 | 24.79 | `FFN-Compile` |
-| 4096 | 111.48 | 46.85 | 46.87 | 46.92 | `SpAtten` |
-| 8192 | 399.98 | 106.10 | 105.76 | 105.97 | `FFN-Compile` |
+> 结论：该开关对短序列有帮助，但会削弱长序列优势，因此不作为默认主线。
 
-结论：
+## 当前阶段结论
 
-- FFN 图化只带来极小边际收益。
-- 当前端到端瓶颈并不主要位于 FFN。
+项目已完成从“可运行”到“可在长序列注意力路径稳定领先主流稠密后端”的关键跨越。  
+vLLM baseline 对照已经做过并明确记录；在论文主结论中，我们将其作为“系统级参考上界”，而将 `Dense-SDPA vs SpAtten` 作为“注意力加速能力本身”的核心证据。
 
-## Qwen3 Generalization
-
-为了验证方法的泛化能力，项目将主线方法迁移到 `Qwen3`。实验过程中依次验证了 `quant_only`、`v_prune_only`、`full`，随后加入了最小版 `head pruning`、最小版 `token pruning`，并进一步尝试了 Triton meta 调整、`Triton autotune` 以及更适合 decoder-only 的 block token pruning。
-
-当前收敛出的主要结论如下：
-
-- 方法在 `Qwen3` 上是可行的，说明它具有跨模型架构的泛化能力。
-- 在 `Qwen3` 上，`quant_only`、`v_prune_only`、`full` 都能稳定优于 baseline。
-- `head pruning` 已验证有效。
-- `token pruning` 在 decoder-only 上更敏感，目前还没有形成稳定超越。
-- 当前最稳的主线是：
-  - `progressive quantization`
-  - `minimal head pruning`
-
-近期 `Qwen3` 结果示例如下：
-
-| Seq Len | Baseline (ms) | Quant (ms) | V-Prune (ms) | Full (ms) | Best Variant |
-| --- | ---: | ---: | ---: | ---: | --- |
-| 2048 | 61.74 | 56.59 | 57.40 | 56.72 | `quant_only` |
-| 4096 | 150.77 | 113.41 | 117.90 | 113.57 | `quant_only` |
-| 8192 | 416.51 | 256.13 | 272.72 | 261.21 | `quant_only` |
-
-同时，在更适合 decoder-only 的 block token pruning 试验中，也观察到：
-
-| Seq Len | Baseline (ms) | Quant (ms) | V-Prune (ms) | Full (ms) | Best Variant |
-| --- | ---: | ---: | ---: | ---: | --- |
-| 2048 | 61.70 | 58.37 | 59.53 | 58.60 | `quant_only` |
-| 4096 | 150.43 | 118.69 | 122.24 | 117.96 | `full` |
-| 8192 | 419.92 | 259.95 | 276.95 | 264.48 | `quant_only` |
-
-结论：
-
-- `Qwen3` 已经证明方法具有泛用性。
-- 但其最优路径与 BERT 并不相同。
-- decoder-only 上的 token pruning 仍需更有针对性的设计。
-
-## Current Conclusions
-
-截至目前，本项目可以得到以下结论：
-
-- SpAtten 风格的稀疏注意力方法可以在通用 GPU 上获得真实收益。
-- 对 BERT 这类 encoder-only 模型，项目主线已经收敛到 `BF16-MSB + Full SpAtten + Cascade Pruning`。
-- 对 Qwen3 这类 decoder-only 模型，方法同样可行，但最优路径更偏向 `progressive quantization + minimal head pruning`。
-- `torch.compile`、`CUDA Graph` 和 FFN 图化都已验证，但并不是当前主收益来源。
-- 不同模型架构下的最优稀疏策略并不相同，这也是本项目的重要研究发现之一。
-
-## Project Structure
-
-- `spattn/`
-  - 主模型与注意力实现
-- `bench_kernel/`
-  - 模型级消融、对比实验、参数扫描脚本
-- `benchmark/`
-  - 基础 benchmark 与图化测试工具
-- `module.py`
-  - 层间状态传递与 token compaction
-- `tests/`
-  - 测试脚本
-
-## Quick Start
-
-### BERT Mainline
+## 快速复现（主线命令）
 
 ```bash
-pixi run python -m bench_kernel.model_seq_ablation_bf16_msb \
-  --seq-lens 1024,2048,4096,8192 \
-  --warmup 10 \
-  --iters 30 \
-  --enable-head-prune \
-  --enable-token-prune \
-  --head-prune-num 1 \
-  --token-prune-num 1
+unset OMP_NUM_THREADS
+pixi run python -m bench_kernel.model_seq_attention_backend_compare_qwen3 \
+  --seq-lens 4096,8192 \
+  --warmup 10 --iters 30 \
+  --model-name /root/autodl-tmp/models/Qwen3-0.6B-ms \
+  --allow-local-pretrained \
+  --enable-head-prune --head-prune-num 1 --head-prune-interval 1
 ```
 
-### Qwen3 Generalization
+## 项目结构
 
-```bash
-pixi run python -m bench_kernel.model_seq_ablation_qwen3_bf16_msb \
-  --seq-lens 2048,4096,8192 \
-  --enable-head-prune \
-  --head-prune-num 1
-```
-
-### Qwen3 Decoder-Oriented Token Pruning
-
-```bash
-pixi run python -m bench_kernel.model_seq_ablation_qwen3_bf16_msb \
-  --seq-lens 2048,4096,8192 \
-  --enable-head-prune \
-  --enable-token-prune \
-  --head-prune-num 1 \
-  --token-prune-num 1 \
-  --token-block-size 16 \
-  --token-recent-keep 128 \
-  --token-prefix-keep 1
-```
-
+- `spattn/`: SpAtten 核心实现（BERT / Qwen3、Triton 内核、forward patch）
+- `bench_kernel/`: 模型级与序列级对比实验脚本
+- `benchmark/`: 通用 benchmark 工具
+- `module.py`: 权重切片、token compaction 与通用辅助模块
+- `tests/`: 测试脚本
 
