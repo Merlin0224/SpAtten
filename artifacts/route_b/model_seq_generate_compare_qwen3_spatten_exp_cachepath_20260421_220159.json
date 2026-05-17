@@ -1,0 +1,127 @@
+{
+  "timestamp": "20260421_220159",
+  "device": "NVIDIA GeForce RTX 3090",
+  "model_name": "/root/autodl-tmp/models/Qwen3-0.6B-ms",
+  "seq_lens": [
+    2048,
+    4096,
+    8192
+  ],
+  "warmup": 5,
+  "iters": 10,
+  "decode_steps": 16,
+  "quant_threshold": 0.01,
+  "v_threshold": 0.05,
+  "enable_head_prune": true,
+  "head_prune_num": 1,
+  "head_prune_start_layer": 0,
+  "head_prune_interval": 1,
+  "enable_prefill_sdpa_fast_path": true,
+  "prefill_sdpa_max_seq_len": 2048,
+  "kv_window_size": 2048,
+  "kv_prefix_keep": 0,
+  "results": {
+    "2048": {
+      "hf_dense": {
+        "prefill_ms": 72.421783,
+        "decode_1tok_ms": 35.698074,
+        "decode_multi_tok_ms": 27.608896,
+        "ttft_ms": 66.28938,
+        "decode_tok_per_s": 28.012716,
+        "decode_multi_tok_per_s": 36.22021
+      },
+      "sp_prefill_opt": {
+        "prefill_ms": 73.502515,
+        "decode_1tok_ms": 34.4875,
+        "decode_multi_tok_ms": 34.215629,
+        "ttft_ms": 67.558173,
+        "decode_tok_per_s": 28.996013,
+        "decode_multi_tok_per_s": 29.22641
+      },
+      "sp_decode_opt": {
+        "prefill_ms": 74.825726,
+        "decode_1tok_ms": 35.8272,
+        "decode_multi_tok_ms": 36.088147,
+        "ttft_ms": 69.062756,
+        "decode_tok_per_s": 27.911754,
+        "decode_multi_tok_per_s": 27.709929
+      },
+      "sp_kv_window_opt": {
+        "prefill_ms": 75.179724,
+        "decode_1tok_ms": 37.64183,
+        "decode_multi_tok_ms": 37.993479,
+        "ttft_ms": 69.06698,
+        "decode_tok_per_s": 26.56619,
+        "decode_multi_tok_per_s": 26.320306
+      }
+    },
+    "4096": {
+      "hf_dense": {
+        "prefill_ms": 156.303357,
+        "decode_1tok_ms": 29.074432,
+        "decode_multi_tok_ms": 29.48921,
+        "ttft_ms": 141.23634,
+        "decode_tok_per_s": 34.394481,
+        "decode_multi_tok_per_s": 33.910708
+      },
+      "sp_prefill_opt": {
+        "prefill_ms": 148.334998,
+        "decode_1tok_ms": 43.105178,
+        "decode_multi_tok_ms": 36.545152,
+        "ttft_ms": 133.075928,
+        "decode_tok_per_s": 23.199069,
+        "decode_multi_tok_per_s": 27.363411
+      },
+      "sp_decode_opt": {
+        "prefill_ms": 148.645996,
+        "decode_1tok_ms": 40.883507,
+        "decode_multi_tok_ms": 39.541869,
+        "ttft_ms": 133.695483,
+        "decode_tok_per_s": 24.459741,
+        "decode_multi_tok_per_s": 25.28965
+      },
+      "sp_kv_window_opt": {
+        "prefill_ms": 148.652649,
+        "decode_1tok_ms": 41.187328,
+        "decode_multi_tok_ms": 40.757709,
+        "ttft_ms": 133.624805,
+        "decode_tok_per_s": 24.279313,
+        "decode_multi_tok_per_s": 24.535236
+      }
+    },
+    "8192": {
+      "hf_dense": {
+        "prefill_ms": 365.596777,
+        "decode_1tok_ms": 30.954291,
+        "decode_multi_tok_ms": 28.973197,
+        "ttft_ms": 333.696606,
+        "decode_tok_per_s": 32.305699,
+        "decode_multi_tok_per_s": 34.514658
+      },
+      "sp_prefill_opt": {
+        "prefill_ms": 327.862671,
+        "decode_1tok_ms": 40.931123,
+        "decode_multi_tok_ms": 40.756807,
+        "ttft_ms": 294.295972,
+        "decode_tok_per_s": 24.431286,
+        "decode_multi_tok_per_s": 24.535779
+      },
+      "sp_decode_opt": {
+        "prefill_ms": 322.732227,
+        "decode_1tok_ms": 39.786394,
+        "decode_multi_tok_ms": 39.472486,
+        "ttft_ms": 289.35376,
+        "decode_tok_per_s": 25.13422,
+        "decode_multi_tok_per_s": 25.334102
+      },
+      "sp_kv_window_opt": {
+        "prefill_ms": 322.575269,
+        "decode_1tok_ms": 40.845619,
+        "decode_multi_tok_ms": 40.860768,
+        "ttft_ms": 289.389648,
+        "decode_tok_per_s": 24.48243,
+        "decode_multi_tok_per_s": 24.473353
+      }
+    }
+  }
+}

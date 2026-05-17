@@ -1,0 +1,145 @@
+====================
+1) Baseline: no prefill fast path, KV window=2048, prefix=0
+====================
+`torch_dtype` is deprecated! Use `dtype` instead!
+Qwen3 use_cache Path Explore (Experimental)
+Device: NVIDIA GeForce RTX 3090
+Model: /root/autodl-tmp/models/Qwen3-0.6B-ms
+Decode steps (multi-step metric): 16
+Head prune enabled: True (num=1)
+Prefill SDPA fast path: False (max_seq_len=0)
+Decode KV window: size=2048, prefix_keep=0
+Loading weights:   0%|          | 0/311 [00:00<?, ?it/s]Loading weights:  44%|████▎     | 136/311 [00:00<00:00, 765.42it/s]Loading weights:  68%|██████▊   | 213/311 [00:00<00:00, 734.44it/s]Loading weights:  92%|█████████▏| 286/311 [00:00<00:00, 708.17it/s]Loading weights: 100%|██████████| 311/311 [00:00<00:00, 642.98it/s]
+The following generation flags are not valid and may be ignored: ['temperature', 'top_p', 'top_k']. Set `TRANSFORMERS_VERBOSITY=info` for more details.
+
+Prefill Latency (ms)
+Seq Len  | HF         | PrefillOpt | DecodeOpt  | KVWinOpt  
+------------------------------------------------------------------
+2048     | 71.4122    | 74.6952    | 74.9473    | 75.4243   
+4096     | 156.3608   | 148.0214   | 148.2705   | 148.4000  
+8192     | 364.9972   | 321.6339   | 322.0702   | 322.6029  
+
+Decode-1tok Latency (ms)
+Seq Len  | HF         | PrefillOpt | DecodeOpt  | KVWinOpt  
+------------------------------------------------------------------
+2048     | 27.5839    | 37.5526    | 38.9220    | 40.0559   
+4096     | 30.4053    | 38.6422    | 39.1934    | 40.1557   
+8192     | 28.9539    | 38.2906    | 38.8826    | 40.9560   
+
+Decode-16tok Avg Latency (ms/token)
+Seq Len  | HF         | PrefillOpt | DecodeOpt  | KVWinOpt  
+------------------------------------------------------------------
+2048     | 27.7912    | 37.9824    | 37.8442    | 40.4976   
+4096     | 28.9958    | 38.3893    | 38.1908    | 39.8398   
+8192     | 27.7669    | 38.7408    | 38.6449    | 40.1096   
+
+Saved: artifacts/route_b/model_seq_generate_compare_qwen3_spatten_exp_cachepath_20260421_215737.json
+====================
+2) Prefill SDPA fast path: max_seq_len=2048, KV window=2048, prefix=0
+====================
+`torch_dtype` is deprecated! Use `dtype` instead!
+Qwen3 use_cache Path Explore (Experimental)
+Device: NVIDIA GeForce RTX 3090
+Model: /root/autodl-tmp/models/Qwen3-0.6B-ms
+Decode steps (multi-step metric): 16
+Head prune enabled: True (num=1)
+Prefill SDPA fast path: True (max_seq_len=2048)
+Decode KV window: size=2048, prefix_keep=0
+Loading weights:   0%|          | 0/311 [00:00<?, ?it/s]Loading weights:  30%|███       | 94/311 [00:00<00:00, 936.90it/s]Loading weights:  60%|██████    | 188/311 [00:00<00:00, 901.33it/s]Loading weights:  90%|████████▉ | 279/311 [00:00<00:00, 654.46it/s]Loading weights: 100%|██████████| 311/311 [00:00<00:00, 767.86it/s]
+The following generation flags are not valid and may be ignored: ['temperature', 'top_p', 'top_k']. Set `TRANSFORMERS_VERBOSITY=info` for more details.
+
+Prefill Latency (ms)
+Seq Len  | HF         | PrefillOpt | DecodeOpt  | KVWinOpt  
+------------------------------------------------------------------
+2048     | 72.4218    | 73.5025    | 74.8257    | 75.1797   
+4096     | 156.3034   | 148.3350   | 148.6460   | 148.6526  
+8192     | 365.5968   | 327.8627   | 322.7322   | 322.5753  
+
+Decode-1tok Latency (ms)
+Seq Len  | HF         | PrefillOpt | DecodeOpt  | KVWinOpt  
+------------------------------------------------------------------
+2048     | 35.6981    | 34.4875    | 35.8272    | 37.6418   
+4096     | 29.0744    | 43.1052    | 40.8835    | 41.1873   
+8192     | 30.9543    | 40.9311    | 39.7864    | 40.8456   
+
+Decode-16tok Avg Latency (ms/token)
+Seq Len  | HF         | PrefillOpt | DecodeOpt  | KVWinOpt  
+------------------------------------------------------------------
+2048     | 27.6089    | 34.2156    | 36.0881    | 37.9935   
+4096     | 29.4892    | 36.5452    | 39.5419    | 40.7577   
+8192     | 28.9732    | 40.7568    | 39.4725    | 40.8608   
+
+Saved: artifacts/route_b/model_seq_generate_compare_qwen3_spatten_exp_cachepath_20260421_220159.json
+====================
+3) Aggressive KV: window=1024, prefix=0
+====================
+`torch_dtype` is deprecated! Use `dtype` instead!
+Qwen3 use_cache Path Explore (Experimental)
+Device: NVIDIA GeForce RTX 3090
+Model: /root/autodl-tmp/models/Qwen3-0.6B-ms
+Decode steps (multi-step metric): 16
+Head prune enabled: True (num=1)
+Prefill SDPA fast path: False (max_seq_len=0)
+Decode KV window: size=1024, prefix_keep=0
+Loading weights:   0%|          | 0/311 [00:00<?, ?it/s]Loading weights:  31%|███       | 97/311 [00:00<00:00, 536.89it/s]Loading weights:  50%|████▉     | 154/311 [00:00<00:00, 551.39it/s]Loading weights:  68%|██████▊   | 210/311 [00:00<00:00, 544.81it/s]Loading weights:  87%|████████▋ | 270/311 [00:00<00:00, 563.98it/s]Loading weights: 100%|██████████| 311/311 [00:00<00:00, 623.02it/s]
+The following generation flags are not valid and may be ignored: ['temperature', 'top_p', 'top_k']. Set `TRANSFORMERS_VERBOSITY=info` for more details.
+
+Prefill Latency (ms)
+Seq Len  | HF         | PrefillOpt | DecodeOpt  | KVWinOpt  
+------------------------------------------------------------------
+2048     | 72.5032    | 74.3341    | 74.5711    | 74.7879   
+4096     | 155.9345   | 147.8741   | 148.4676   | 148.2598  
+8192     | 367.1269   | 321.8286   | 322.2730   | 322.4183  
+
+Decode-1tok Latency (ms)
+Seq Len  | HF         | PrefillOpt | DecodeOpt  | KVWinOpt  
+------------------------------------------------------------------
+2048     | 36.6677    | 34.9423    | 35.1441    | 37.8446   
+4096     | 26.6910    | 34.2814    | 35.3397    | 38.2569   
+8192     | 28.6304    | 37.0329    | 36.4243    | 37.4243   
+
+Decode-16tok Avg Latency (ms/token)
+Seq Len  | HF         | PrefillOpt | DecodeOpt  | KVWinOpt  
+------------------------------------------------------------------
+2048     | 26.6809    | 34.9563    | 35.4621    | 37.1127   
+4096     | 26.0585    | 35.0096    | 35.3872    | 37.2440   
+8192     | 27.2755    | 36.2503    | 36.0373    | 39.4441   
+
+Saved: artifacts/route_b/model_seq_generate_compare_qwen3_spatten_exp_cachepath_20260421_220614.json
+====================
+4) Conservative KV: window=2048, prefix=128
+====================
+`torch_dtype` is deprecated! Use `dtype` instead!
+Qwen3 use_cache Path Explore (Experimental)
+Device: NVIDIA GeForce RTX 3090
+Model: /root/autodl-tmp/models/Qwen3-0.6B-ms
+Decode steps (multi-step metric): 16
+Head prune enabled: True (num=1)
+Prefill SDPA fast path: False (max_seq_len=0)
+Decode KV window: size=2048, prefix_keep=128
+Loading weights:   0%|          | 0/311 [00:00<?, ?it/s]Loading weights:  36%|███▌      | 111/311 [00:00<00:00, 1100.55it/s]Loading weights:  71%|███████▏  | 222/311 [00:00<00:00, 712.48it/s] Loading weights:  97%|█████████▋| 301/311 [00:00<00:00, 725.52it/s]Loading weights: 100%|██████████| 311/311 [00:00<00:00, 641.91it/s]
+The following generation flags are not valid and may be ignored: ['temperature', 'top_p', 'top_k']. Set `TRANSFORMERS_VERBOSITY=info` for more details.
+
+Prefill Latency (ms)
+Seq Len  | HF         | PrefillOpt | DecodeOpt  | KVWinOpt  
+------------------------------------------------------------------
+2048     | 72.4636    | 74.8485    | 75.3930    | 74.7734   
+4096     | 156.0081   | 147.9305   | 148.5327   | 148.0869  
+8192     | 366.5766   | 321.9861   | 322.4381   | 322.5969  
+
+Decode-1tok Latency (ms)
+Seq Len  | HF         | PrefillOpt | DecodeOpt  | KVWinOpt  
+------------------------------------------------------------------
+2048     | 27.8437    | 37.7241    | 35.2510    | 38.1006   
+4096     | 28.2930    | 35.7906    | 35.4672    | 38.0368   
+8192     | 27.0311    | 37.1515    | 37.1868    | 38.4953   
+
+Decode-16tok Avg Latency (ms/token)
+Seq Len  | HF         | PrefillOpt | DecodeOpt  | KVWinOpt  
+------------------------------------------------------------------
+2048     | 26.9719    | 35.8103    | 35.5929    | 39.1579   
+4096     | 26.6375    | 35.6677    | 35.4280    | 37.5422   
+8192     | 26.0823    | 36.2294    | 36.1030    | 38.4584   
+
+Saved: artifacts/route_b/model_seq_generate_compare_qwen3_spatten_exp_cachepath_20260421_221029.json
+All four runs completed.
