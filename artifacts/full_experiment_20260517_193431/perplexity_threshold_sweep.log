@@ -1,0 +1,12 @@
+`torch_dtype` is deprecated! Use `dtype` instead!
+======================================================================
+SpAtten Perplexity Benchmark - Qwen3-0.6B
+Device: NVIDIA GeForce RTX 3090
+Seq lens: [1024, 2048, 4096]
+Modes: ['quant_only', 'v_prune_only', 'full']
+Head prune: off
+======================================================================
+
+[1/4] Loading base model and tokenizer...
+Loading weights:   0%|          | 0/311 [00:00<?, ?it/s]Loading weights:   5%|▌         | 17/311 [00:00<00:01, 169.97it/s]Loading weights:  56%|█████▌    | 174/311 [00:00<00:00, 990.60it/s]Loading weights:  88%|████████▊ | 273/311 [00:00<00:00, 962.41it/s]Loading weights: 100%|██████████| 311/311 [00:00<00:00, 826.56it/s]
+Token indices sequence length is longer than the specified maximum sequence length for this model (250757 > 131072). Running this sequence through the model will result in indexing errors

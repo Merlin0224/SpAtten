@@ -1,0 +1,64 @@
+`torch_dtype` is deprecated! Use `dtype` instead!
+======================================================================
+SpAtten Perplexity Benchmark - Qwen3-0.6B
+Device: NVIDIA GeForce RTX 3090
+Seq lens: [512, 1024, 2048, 4096]
+Modes: ['dense', 'quant_only', 'v_prune_only', 'full']
+Head prune: off
+======================================================================
+
+[1/4] Loading base model and tokenizer...
+Loading weights:   0%|          | 0/311 [00:00<?, ?it/s]Loading weights:  17%|█▋        | 53/311 [00:00<00:00, 523.95it/s]Loading weights:  53%|█████▎    | 165/311 [00:00<00:00, 872.63it/s]Loading weights:  86%|████████▌ | 267/311 [00:00<00:00, 939.64it/s]Loading weights: 100%|██████████| 311/311 [00:00<00:00, 980.00it/s]
+Token indices sequence length is longer than the specified maximum sequence length for this model (250757 > 131072). Running this sequence through the model will result in indexing errors
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+  Model loaded: /root/autodl-tmp/models/Qwen3-0.6B-ms
+
+[2/4] Preparing evaluation corpus...
+  seq_len=512: 200 chunks | source: GSM8K test (1319 examples, 250757 tokens)
+  seq_len=1024: 200 chunks | source: GSM8K test (1319 examples, 250757 tokens)
+  seq_len=2048: 200 chunks | source: GSM8K test (1319 examples, 250757 tokens)
+  seq_len=4096: 121 chunks | source: GSM8K test (1319 examples, 250757 tokens)
+
+[3/4] Evaluating Dense baseline...
+  Dense | seq=512 | PPL=4.5804 | loss=1.521780
+  Dense | seq=1024 | PPL=3.9086 | loss=1.363176
+  Dense | seq=2048 | PPL=3.5976 | loss=1.280267
+  Dense | seq=4096 | PPL=3.4234 | loss=1.230644
+
+[4/4] Evaluating 3 SpAtten configurations...
+  [1/3] Sp-Quant | seq=512 | hpn=0 hpi=0 qt=0.01 vt=0.05 | PPL=4.5813 | +0.02% vs Dense
+  [1/3] Sp-Quant | seq=1024 | hpn=0 hpi=0 qt=0.01 vt=0.05 | PPL=3.9094 | +0.02% vs Dense
+  [1/3] Sp-Quant | seq=2048 | hpn=0 hpi=0 qt=0.01 vt=0.05 | PPL=3.5983 | +0.02% vs Dense
+  [1/3] Sp-Quant | seq=4096 | hpn=0 hpi=0 qt=0.01 vt=0.05 | PPL=3.4240 | +0.02% vs Dense
+  [2/3] Sp-V | seq=512 | hpn=0 hpi=0 qt=0.01 vt=0.05 | PPL=4.6038 | +0.51% vs Dense
+  [2/3] Sp-V | seq=1024 | hpn=0 hpi=0 qt=0.01 vt=0.05 | PPL=3.9107 | +0.05% vs Dense
+  [2/3] Sp-V | seq=2048 | hpn=0 hpi=0 qt=0.01 vt=0.05 | PPL=3.5894 | +-0.23% vs Dense
+  [2/3] Sp-V | seq=4096 | hpn=0 hpi=0 qt=0.01 vt=0.05 | PPL=3.4116 | +-0.34% vs Dense
+  [3/3] Sp-Full | seq=512 | hpn=0 hpi=0 qt=0.01 vt=0.05 | PPL=4.6363 | +1.22% vs Dense
+  [3/3] Sp-Full | seq=1024 | hpn=0 hpi=0 qt=0.01 vt=0.05 | PPL=3.9281 | +0.50% vs Dense
+  [3/3] Sp-Full | seq=2048 | hpn=0 hpi=0 qt=0.01 vt=0.05 | PPL=3.5990 | +0.04% vs Dense
+  [3/3] Sp-Full | seq=4096 | hpn=0 hpi=0 qt=0.01 vt=0.05 | PPL=3.4169 | +-0.19% vs Dense
+
+======================================================================
+Perplexity Results Summary
+======================================================================
+Variant      Seq    hpn  hpi  qt     vt     PPL        vs Dense  
+----------------------------------------------------------------------
+Dense        512    0    0    -      -      4.5804     (baseline)
+Sp-Quant     512    0    0    0.01   0.05   4.5813     +0.02%    
+Sp-V         512    0    0    0.01   0.05   4.6038     +0.51%    
+Sp-Full      512    0    0    0.01   0.05   4.6363     +1.22%    
+Dense        1024   0    0    -      -      3.9086     (baseline)
+Sp-Quant     1024   0    0    0.01   0.05   3.9094     +0.02%    
+Sp-V         1024   0    0    0.01   0.05   3.9107     +0.05%    
+Sp-Full      1024   0    0    0.01   0.05   3.9281     +0.50%    
+Dense        2048   0    0    -      -      3.5976     (baseline)
+Sp-Quant     2048   0    0    0.01   0.05   3.5983     +0.02%    
+Sp-V         2048   0    0    0.01   0.05   3.5894     -0.23%    
+Sp-Full      2048   0    0    0.01   0.05   3.5990     +0.04%    
+Dense        4096   0    0    -      -      3.4234     (baseline)
+Sp-Quant     4096   0    0    0.01   0.05   3.4240     +0.02%    
+Sp-V         4096   0    0    0.01   0.05   3.4116     -0.34%    
+Sp-Full      4096   0    0    0.01   0.05   3.4169     -0.19%    
+
+Saved: artifacts/full_experiment_20260517_193431/perplexity_baseline/perplexity_benchmark_20260517_193912.json
